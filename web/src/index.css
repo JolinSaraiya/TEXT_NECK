@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Curated Dark Mode Palette */
+  --bg-color: hsl(220, 20%, 8%);
+  --surface-color: hsla(220, 20%, 15%, 0.6); /* Translucent for glassmorphism */
+  --surface-border: hsla(220, 20%, 30%, 0.3);
+  --text-primary: hsl(210, 40%, 98%);
+  --text-secondary: hsl(210, 20%, 70%);
+  
+  /* Neon Accents */
+  --accent-teal: hsl(170, 80%, 50%);
+  --accent-purple: hsl(270, 80%, 60%);
+  --danger-red: hsl(0, 80%, 60%);
+  --success-green: hsl(140, 80%, 50%);
+
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  min-height: 100vh;
+  /* Subtle background gradient */
+  background: radial-gradient(circle at top left, hsla(270, 80%, 60%, 0.1), transparent 40%),
+              radial-gradient(circle at bottom right, hsla(170, 80%, 50%, 0.1), transparent 40%),
+              var(--bg-color);
+  background-attachment: fixed;
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: var(--surface-color);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.glass-panel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Layout */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+/* Typography */
+h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(90deg, var(--text-primary), var(--text-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+p.subtitle {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin-bottom: 2rem;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
