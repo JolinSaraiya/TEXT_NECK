@@ -72,7 +72,9 @@ class AuthService {
   // Sign Out
   Future<void> signOut() async {
     try {
-      await _googleSignIn.signOut();
+      if (!kIsWeb) {
+        await _googleSignIn.signOut();
+      }
       await _auth.signOut();
     } catch (e) {
       print(e.toString());
