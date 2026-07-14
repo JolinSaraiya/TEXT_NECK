@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -13,16 +14,31 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isSignUp = false;
 
-  void _signInWithEmail() async {
+  void _submitEmail() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all fields.')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
-    final user = await _auth.signInWithEmailAndPassword(
-        _emailController.text, _passwordController.text);
+    User? user;
+    if (_isSignUp) {
+      user = await _auth.signUpWithEmailAndPassword(email, password);
+    } else {
+      user = await _auth.signInWithEmailAndPassword(email, password);
+    }
     setState(() => _isLoading = false);
     
     if (user == null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to sign in. Check your credentials.')),
+        SnackBar(content: Text(_isSignUp ? 'Failed to sign up.' : 'Failed to sign in. Check your credentials.')),
       );
     }
   }
@@ -64,20 +80,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 color: Colors.blueAccent,
               ),
               const SizedBox(height: 32),
-              const Text(
-                'Welcome Back',
+              Text(
+                _isSignUp ? 'Create Account' : 'Welcome Back',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Log in to continue your posture journey',
+              Text(
+                _isSignUp ? 'Sign up to start your posture journey' : 'Log in to continue your posture journey',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
                   color: Colors.black54,
                 ),
@@ -110,9 +126,9 @@ class _LoginScreenState extends State<LoginScreen> {
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton.icon(
-                      onPressed: _signInWithEmail,
-                      icon: const Icon(Icons.login),
-                      label: const Text('Sign in with Email'),
+                      onPressed: _submitEmail,
+                      icon: Icon(_isSignUp ? Icons.person_add : Icons.login),
+                      label: Text(_isSignUp ? 'Sign Up with Email' : 'Sign in with Email'),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         backgroundColor: Colors.blueAccent,
@@ -122,6 +138,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => setState(() => _isSignUp = !_isSignUp),
+                child: Text(
+                  _isSignUp
+                      ? 'Already have an account? Sign In'
+                      : "Don't have an account? Sign Up",
+                  style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                ),
+              ),
               const SizedBox(height: 16),
               const Center(child: Text('OR', style: TextStyle(color: Colors.black54))),
               const SizedBox(height: 16),
