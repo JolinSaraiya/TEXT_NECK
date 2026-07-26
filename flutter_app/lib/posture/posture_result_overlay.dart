@@ -66,7 +66,7 @@ class PostureResultOverlay extends StatelessWidget {
     final Color color = riskLevel.color;
 
     return Positioned(
-      bottom: 100,
+      bottom: 120, // Increased to avoid floating pill bar
       left: 16,
       right: 16,
       child: ClipRRect(

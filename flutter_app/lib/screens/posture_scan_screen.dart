@@ -350,7 +350,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 110), // Increased bottom padding to 110 to clear the pill bar
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
