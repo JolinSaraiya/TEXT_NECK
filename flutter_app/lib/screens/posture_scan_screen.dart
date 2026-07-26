@@ -27,6 +27,7 @@ import '../camera/live_camera_stream.dart';
 // ── Member 2's deliverables ──
 import '../posture/neck_angle_calculator.dart';
 import '../posture/posture_result_overlay.dart';
+import '../services/posture_history_manager.dart';
 
 /// The main posture scanning screen that integrates:
 /// - [LiveCameraStream] (Member 1): Camera preview + ML Kit pose detection
@@ -106,6 +107,14 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
 
     // ── Show Session Summary ──
     if (_currentResult != null && mounted) {
+      // Save session to history manager
+      PostureHistoryManager().addSession(
+        angle: _currentResult!.angle,
+        riskLevel: _currentResult!.riskLevel,
+        earSide: _currentResult!.earSide,
+        frameCount: _frameCount,
+      );
+      
       _showSessionSummary();
     }
   }

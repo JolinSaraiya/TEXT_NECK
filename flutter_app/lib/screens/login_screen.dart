@@ -13,13 +13,47 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final AuthService _auth = AuthService();
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isSignUpMode = false;
+
+  String _getErrorMessage(dynamic e) {
+    if (e is FirebaseAuthException) {
+      switch (e.code) {
+        case 'user-not-found':
+          return 'No user found with this email.';
+        case 'wrong-password':
+          return 'Incorrect password. Please try again.';
+        case 'email-already-in-use':
+          return 'An account already exists with this email.';
+        case 'weak-password':
+          return 'The password is too weak. Must be at least 6 characters.';
+        case 'invalid-email':
+          return 'The email address is invalid.';
+        case 'user-disabled':
+          return 'This user account has been disabled.';
+        case 'operation-not-allowed':
+          return 'This sign-in method is not enabled.';
+        default:
+          return e.message ?? 'An authentication error occurred.';
+      }
+    }
+    return e.toString();
+  }
 
   void _submitEmail() async {
+    final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
+
+    if (_isSignUpMode && name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your name.')),
+      );
+      return;
+    }
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -29,30 +63,36 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
-    final user = await _auth.signInWithEmailAndPassword(email, password);
-    setState(() => _isLoading = false);
+    User? user;
+    String? errorMsg;
+    
+    try {
+      if (_isSignUpMode) {
+        user = await _auth.signUpWithEmailAndPassword(email, password, name: name);
+      } else {
+        user = await _auth.signInWithEmailAndPassword(email, password);
+      }
+    } catch (e) {
+      errorMsg = _getErrorMessage(e);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
     
     if (user == null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to sign in. Check your credentials.')),
-      );
-    }
-  }
-
-  void _signInWithGoogle() async {
-    setState(() => _isLoading = true);
-    final user = await _auth.signInWithGoogle();
-    setState(() => _isLoading = false);
-
-    if (user == null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to sign in with Google.')),
+        SnackBar(
+          content: Text(errorMsg ?? 'Authentication failed. Please try again.'),
+          backgroundColor: Colors.redAccent,
+        ),
       );
     }
   }
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -108,7 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 48),
               // Welcome Text
               Text(
-                'Welcome back',
+                _isSignUpMode ? 'Create account' : 'Welcome back',
                 style: GoogleFonts.inter(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -117,7 +157,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Sign in to continue your posture journey',
+                _isSignUpMode
+                    ? 'Register to start your posture journey'
+                    : 'Sign in to continue your posture journey',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: AppColors.textSecondary,
@@ -125,6 +167,17 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 32),
               
+              // Name Field (only in Sign Up mode)
+              if (_isSignUpMode) ...[
+                _buildTextField(
+                  controller: _nameController,
+                  label: 'NAME',
+                  hint: 'John Doe',
+                  obscureText: false,
+                ),
+                const SizedBox(height: 16),
+              ],
+
               // Email Field
               _buildTextField(
                 controller: _emailController,
@@ -141,24 +194,27 @@ class _LoginScreenState extends State<LoginScreen> {
                 obscureText: true,
               ),
               
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {},
-                  child: Text(
-                    'Forgot password?',
-                    style: GoogleFonts.inter(
-                      color: AppColors.primaryAccent,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
+              if (!_isSignUpMode) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {},
+                    child: Text(
+                      'Forgot password?',
+                      style: GoogleFonts.inter(
+                        color: AppColors.primaryAccent,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ] else
+                const SizedBox(height: 24),
               
               const SizedBox(height: 24),
-              // Sign In Button
+              // Sign In / Sign Up Button
               _isLoading
                   ? const Center(child: CircularProgressIndicator(color: AppColors.primaryAccent))
                   : Container(
@@ -184,7 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           elevation: 0,
                         ),
                         child: Text(
-                          'Sign In',
+                          _isSignUpMode ? 'Sign Up' : 'Sign In',
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -192,38 +248,35 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    
-              const SizedBox(height: 24),
-              Center(
-                child: Text(
-                  'or continue with',
-                  style: GoogleFonts.inter(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
               
-              // Google Button
-              OutlinedButton.icon(
-                onPressed: _isLoading ? null : _signInWithGoogle,
-                icon: const Icon(Icons.g_mobiledata, size: 28, color: Colors.white),
-                label: Text(
-                  'Continue with Google',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
+              const SizedBox(height: 32),
+              // Toggle Link
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _isSignUpMode ? 'Already have an account? ' : "Don't have an account? ",
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                    ),
                   ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  backgroundColor: AppColors.surface,
-                  side: const BorderSide(color: Colors.transparent),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isSignUpMode = !_isSignUpMode;
+                      });
+                    },
+                    child: Text(
+                      _isSignUpMode ? 'Sign In' : 'Sign Up',
+                      style: GoogleFonts.inter(
+                        color: AppColors.primaryAccent,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),

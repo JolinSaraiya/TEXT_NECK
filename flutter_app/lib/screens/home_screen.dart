@@ -18,14 +18,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0; // Default to Home Dashboard
 
-  final List<Widget> _screens = const [
-    DashboardView(),
-    PostureScanScreen(),
-    AnalysisResultsScreen(),
-    ExerciseScreen(),
-    ProfileScreen(),
-  ];
-
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -34,12 +26,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> screens = [
+      DashboardView(onProfileTap: () => _onItemTapped(4)),
+      const PostureScanScreen(),
+      const AnalysisResultsScreen(),
+      const ExerciseScreen(),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
           // The current screen
-          _screens[_selectedIndex],
+          screens[_selectedIndex],
           
           // Floating Pill Navigation Bar
           Positioned(
@@ -55,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildFloatingNavBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(40),
@@ -74,17 +74,17 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildNavItem(0, 'Home'),
-          _buildNavItem(1, 'Camera'),
-          _buildNavItem(2, 'Results'),
-          _buildNavItem(3, 'Exercise'),
-          _buildNavItem(4, 'Profile'),
+          _buildNavItem(0, Icons.grid_view_rounded, 'Home'),
+          _buildNavItem(1, Icons.photo_camera_rounded, 'Camera'),
+          _buildNavItem(2, Icons.analytics_rounded, 'Results'),
+          _buildNavItem(3, Icons.fitness_center_rounded, 'Exercise'),
+          _buildNavItem(4, Icons.person_rounded, 'Profile'),
         ],
       ),
     );
   }
 
-  Widget _buildNavItem(int index, String label) {
+  Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _selectedIndex == index;
 
     return GestureDetector(
@@ -93,18 +93,34 @@ class _HomeScreenState extends State<HomeScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutQuint,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 16.0 : 12.0,
+          vertical: 10.0,
+        ),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primaryAccent : Colors.transparent,
           borderRadius: BorderRadius.circular(30),
         ),
-        child: Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? Colors.black : AppColors.textSecondary,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? Colors.black : AppColors.textSecondary,
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
