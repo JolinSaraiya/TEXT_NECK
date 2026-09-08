@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../posture/neck_angle_calculator.dart';
 
 class PostureSessionResult {
@@ -16,32 +19,55 @@ class PostureSessionResult {
     required this.frameCount,
   });
 
-  // Risk score is scaled from 0% (0 degrees) to 100% (60+ degrees)
+  // Factory to create from Firestore Map
+  factory PostureSessionResult.fromMap(Map<String, dynamic> data) {
+    return PostureSessionResult(
+      timestamp: (data['timestamp'] as Timestamp).toDate(),
+      angle: (data['angle'] ?? 0.0).toDouble(),
+      riskLevel: RiskLevel.values.firstWhere(
+        (e) => e.name == data['riskLevel'], 
+        orElse: () => RiskLevel.warning,
+      ),
+      earSide: data['earSide'] ?? 'unknown',
+      frameCount: data['frameCount'] ?? 0,
+    );
+  }
+
+  // Convert to Map for Firestore
+  Map<String, dynamic> toMap() {
+    return {
+      'timestamp': Timestamp.fromDate(timestamp),
+      'angle': angle,
+      'riskLevel': riskLevel.name,
+      'earSide': earSide,
+      'frameCount': frameCount,
+    };
+  }
+
+  // Risk score is scaled based on CVA guidelines
   int get riskScore {
-    // 0 to 15 degrees: 0% to 20%
-    // 15 to 30 degrees: 20% to 50%
-    // 30 to 60+ degrees: 50% to 100%
-    if (angle < 15) {
-      return ((angle / 15.0) * 20).round();
-    } else if (angle < 30) {
-      return (20 + ((angle - 15) / 15.0) * 30).round();
+    if (angle >= 48.0) {
+      return 0; // 0% risk
+    } else if (angle >= 43.0) {
+      // 43° -> 50% risk, 48° -> 0% risk
+      return (((48.0 - angle) / 5.0) * 50.0).round();
     } else {
-      return (50 + ((angle - 30) / 30.0) * 50).clamp(50, 100).round();
+      // 43° -> 50% risk, smaller angle -> closer to 100%
+      // Cap 100% at a CVA of 30°
+      return (50.0 + ((43.0 - angle) / 13.0) * 50.0).clamp(50, 100).round();
     }
   }
 
   // Spine load calculation based on neck angle (cervical spine stress approximations)
   double get spineLoadKg {
-    // 0 deg: 5.0 kg
-    // 15 deg: 12.0 kg
-    // 30 deg: 18.0 kg
-    // 45 deg: 22.0 kg
-    // 60 deg: 27.0 kg
-    if (angle <= 0) return 5.0;
-    if (angle <= 15) return 5.0 + (angle / 15.0) * 7.0;
-    if (angle <= 30) return 12.0 + ((angle - 15) / 15.0) * 6.0;
-    if (angle <= 45) return 18.0 + ((angle - 30) / 15.0) * 4.0;
-    if (angle <= 60) return 22.0 + ((angle - 45) / 15.0) * 5.0;
+    // CVA is measured from the horizontal. Vertical deviation = 90 - CVA
+    double verticalDeviation = (90.0 - angle).clamp(0.0, 90.0);
+    
+    if (verticalDeviation <= 0) return 5.0;
+    if (verticalDeviation <= 15) return 5.0 + (verticalDeviation / 15.0) * 7.0;
+    if (verticalDeviation <= 30) return 12.0 + ((verticalDeviation - 15) / 15.0) * 6.0;
+    if (verticalDeviation <= 45) return 18.0 + ((verticalDeviation - 30) / 15.0) * 4.0;
+    if (verticalDeviation <= 60) return 22.0 + ((verticalDeviation - 45) / 15.0) * 5.0;
     return 27.0; // clamp at max load
   }
 }
@@ -51,9 +77,38 @@ class PostureHistoryManager extends ChangeNotifier {
 
   factory PostureHistoryManager() => _instance;
 
-  PostureHistoryManager._internal();
+  List<PostureSessionResult> _history = [];
+  StreamSubscription<QuerySnapshot>? _sessionSub;
+  StreamSubscription<User?>? _authSub;
 
-  final List<PostureSessionResult> _history = [];
+  PostureHistoryManager._internal() {
+    // Listen to authentication state changes to fetch the correct user's data
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        _subscribeToSessions(user.uid);
+      } else {
+        _sessionSub?.cancel();
+        _history.clear();
+        notifyListeners();
+      }
+    });
+  }
+
+  void _subscribeToSessions(String uid) {
+    _sessionSub?.cancel();
+    _sessionSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('sessions')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      _history = snapshot.docs
+          .map((doc) => PostureSessionResult.fromMap(doc.data() as Map<String, dynamic>))
+          .toList();
+      notifyListeners();
+    });
+  }
 
   List<PostureSessionResult> get history => List.unmodifiable(_history);
 
@@ -101,12 +156,15 @@ class PostureHistoryManager extends ChangeNotifier {
     return streakCount;
   }
 
-  void addSession({
+  Future<void> addSession({
     required double angle,
     required RiskLevel riskLevel,
     required String earSide,
     required int frameCount,
-  }) {
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
     final session = PostureSessionResult(
       timestamp: DateTime.now(),
       angle: angle,
@@ -114,7 +172,23 @@ class PostureHistoryManager extends ChangeNotifier {
       earSide: earSide,
       frameCount: frameCount,
     );
-    _history.insert(0, session); // Insert at the beginning (most recent first)
-    notifyListeners();
+
+    // Write to Firestore
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('sessions')
+        .add(session.toMap());
+        
+    // Note: The UI will automatically update because the Firestore 
+    // snapshot listener will see the new document and call notifyListeners()
+  }
+
+  @override
+  void dispose() {
+    _sessionSub?.cancel();
+    _authSub?.cancel();
+    super.dispose();
   }
 }
+

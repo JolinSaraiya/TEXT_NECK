@@ -43,6 +43,55 @@ class _LoginScreenState extends State<LoginScreen> {
     return e.toString();
   }
 
+  void _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email first to reset password.')),
+      );
+      return;
+    }
+    
+    try {
+      await _auth.sendPasswordResetEmail(email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password reset email sent! Check your inbox.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_getErrorMessage(e)), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  void _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    User? user;
+    String? errorMsg;
+    try {
+      user = await _auth.signInWithGoogle();
+    } catch (e) {
+      errorMsg = _getErrorMessage(e);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+    // Google sign in might return null if user canceled, so only show error if there is one
+    if (user == null && errorMsg != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMsg), backgroundColor: Colors.redAccent),
+      );
+    }
+  }
+
   void _submitEmail() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
@@ -199,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {},
+                    onPressed: _handleForgotPassword, // WIRED UP HERE
                     child: Text(
                       'Forgot password?',
                       style: GoogleFonts.inter(
@@ -277,6 +326,31 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ],
+              ),
+              
+              const SizedBox(height: 24),
+              const Row(
+                children: [
+                  Expanded(child: Divider(color: AppColors.surfaceLight, thickness: 1)),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('OR', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  ),
+                  Expanded(child: Divider(color: AppColors.surfaceLight, thickness: 1)),
+                ],
+              ),
+              const SizedBox(height: 24),
+              
+              // Google Sign In
+              OutlinedButton.icon(
+                onPressed: _handleGoogleSignIn,
+                icon: const Icon(Icons.g_mobiledata, size: 28, color: Colors.white),
+                label: Text('Continue with Google', style: GoogleFonts.inter(fontSize: 15, color: Colors.white)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: const BorderSide(color: AppColors.surfaceLight),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ],
           ),

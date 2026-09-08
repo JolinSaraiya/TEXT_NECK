@@ -61,6 +61,10 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
   /// Total frames processed in this session (for debug display).
   int _frameCount = 0;
 
+  // ── Tracking Bad Posture ──
+  DateTime? _badPostureStartTime;
+  bool _isAlertShowing = false;
+
   // ── GlobalKey to control LiveCameraStream ──────────────────────────────
   /// We use a GlobalKey to access LiveCameraStreamState's public methods
   /// (startStreaming, stopStreaming) from this parent widget.
@@ -79,6 +83,8 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
       _isSessionActive = true;
       _currentResult = null;
       _frameCount = 0;
+      _badPostureStartTime = null;
+      _isAlertShowing = false;
     });
 
     // Tell Member 1 to start streaming
@@ -147,6 +153,24 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
         _currentResult = result;
       });
 
+      // ── Bad Posture 5-Second Tracking ──
+      if (_currentResult?.riskLevel == RiskLevel.critical) {
+        _badPostureStartTime ??= DateTime.now();
+
+        if (!_isAlertShowing &&
+            DateTime.now().difference(_badPostureStartTime!) >=
+                const Duration(seconds: 5)) {
+          _showRemedyAlert();
+        }
+      } else {
+        // Reset if posture improves
+        _badPostureStartTime = null;
+        if (_isAlertShowing) {
+          _isAlertShowing = false;
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        }
+      }
+
       // ── Haptic Feedback on Risk Transitions ──
       if (_currentResult?.riskLevel == RiskLevel.critical) {
         HapticFeedback.mediumImpact();
@@ -164,6 +188,65 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
   // ═══════════════════════════════════════════════════════════════════════
   // Session Summary Dialog
   // ═══════════════════════════════════════════════════════════════════════
+
+  void _showRemedyAlert() {
+    setState(() => _isAlertShowing = true);
+    HapticFeedback.heavyImpact();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFFE64545),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 5),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.white),
+                SizedBox(width: 8),
+                Text(
+                  'Critical Posture Detected!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Remedies:\n• Chin Tucks\n• Raise screen to eye level\n• Upper Trapezius Stretch',
+              style: TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'DISMISS',
+          textColor: Colors.white,
+          onPressed: () {
+            if (mounted) {
+              setState(() {
+                _isAlertShowing = false;
+                _badPostureStartTime = null;
+              });
+            }
+          },
+        ),
+      ),
+    ).closed.then((_) {
+      if (mounted) {
+        setState(() {
+          _isAlertShowing = false;
+          _badPostureStartTime = null;
+        });
+      }
+    });
+  }
 
   void _showSessionSummary() {
     final result = _currentResult!;
