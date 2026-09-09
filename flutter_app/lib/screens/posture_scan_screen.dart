@@ -56,8 +56,16 @@ class PostureScanScreen extends StatefulWidget {
   State<PostureScanScreen> createState() => _PostureScanScreenState();
 }
 
+enum ScanMode {
+  quickScan, // Auto-stops after 3s of stable side-profile posture
+  deskMonitor, // Continuous live monitoring with auto-pause on inactivity
+}
+
 class _PostureScanScreenState extends State<PostureScanScreen> {
   // ── State ──────────────────────────────────────────────────────────────
+  /// Active scanning mode: Quick Scan vs Continuous Desk Monitor
+  ScanMode _scanMode = ScanMode.quickScan;
+
   /// The latest angle calculation result from Member 2's calculator.
   NeckAngleResult? _currentResult;
 
@@ -71,6 +79,18 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
   DateTime? _badPostureStartTime;
   bool _isAlertShowing = false;
 
+  // ── Quick Scan 3-Second Stability Auto-Complete ──
+  DateTime? _stableHoldStartTime;
+  double _stableCountdownSeconds = 3.0;
+  bool _isAutoCompleting = false;
+  final List<NeckAngleResult> _stableSampleBuffer = [];
+
+  // ── Desk Monitor Inactivity & Watchdog ──
+  DateTime? _sessionStartTime;
+  DateTime? _lastPoseDetectedTime;
+  bool _isMonitoringPaused = false;
+  Timer? _watchdogTimer;
+
   // ── Web Calculation Stream Timer ──
   Timer? _webCalculationTimer;
   int _webTick = 0;
@@ -78,6 +98,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
   @override
   void dispose() {
     _webCalculationTimer?.cancel();
+    _watchdogTimer?.cancel();
     super.dispose();
   }
 
@@ -101,16 +122,45 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
       _frameCount = 0;
       _badPostureStartTime = null;
       _isAlertShowing = false;
+      _isAutoCompleting = false;
+      _stableHoldStartTime = null;
+      _stableCountdownSeconds = 3.0;
+      _stableSampleBuffer.clear();
+      _sessionStartTime = DateTime.now();
+      _lastPoseDetectedTime = DateTime.now();
+      _isMonitoringPaused = false;
     });
 
     // Tell Member 1 to start streaming
     _cameraKey.currentState?.startStreaming();
 
+    if (_scanMode == ScanMode.deskMonitor) {
+      _startWatchdogTimer();
+    }
+
     if (kIsWeb) {
       _startWebCalculationStream();
     }
 
-    debugPrint('[Integration] 🟢 Session started');
+    debugPrint('[Integration] 🟢 Session started in ${_scanMode.name} mode');
+  }
+
+  void _startWatchdogTimer() {
+    _watchdogTimer?.cancel();
+    _watchdogTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!_isSessionActive || !mounted || _scanMode != ScanMode.deskMonitor) {
+        timer.cancel();
+        return;
+      }
+      if (_lastPoseDetectedTime != null) {
+        final int awaySec = DateTime.now().difference(_lastPoseDetectedTime!).inSeconds;
+        if (awaySec >= 10 && !_isMonitoringPaused) {
+          setState(() {
+            _isMonitoringPaused = true;
+          });
+        }
+      }
+    });
   }
 
   void _startWebCalculationStream() {
@@ -149,21 +199,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
           rawDeltaY: webPose.dy,
         );
 
-        setState(() {
-          _currentResult = result;
-        });
-
-        // ── Bad Posture 5-Second Tracking ──
-        if (result.riskLevel == RiskLevel.critical) {
-          _badPostureStartTime ??= DateTime.now();
-
-          if (!_isAlertShowing &&
-              DateTime.now().difference(_badPostureStartTime!).inSeconds >= 5) {
-            _showRemedyAlert();
-          }
-        } else {
-          _badPostureStartTime = null;
-        }
+        _processPoseResult(result);
       } else {
         // While MediaPipe is acquiring first frame, provide fallback preview
         _webTick++;
@@ -187,12 +223,107 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
     });
   }
 
+  void _processPoseResult(NeckAngleResult result) {
+    if (!_isSessionActive || !mounted || _isAutoCompleting) return;
+
+    _lastPoseDetectedTime = DateTime.now();
+    if (_isMonitoringPaused) {
+      setState(() => _isMonitoringPaused = false);
+    }
+
+    setState(() {
+      _currentResult = result;
+    });
+
+    if (_scanMode == ScanMode.quickScan) {
+      _handleQuickScanStability(result);
+    } else {
+      _handleDeskMonitorAlert(result);
+    }
+  }
+
+  void _handleQuickScanStability(NeckAngleResult result) {
+    if (!result.isSideProfile) {
+      if (_stableHoldStartTime != null) {
+        setState(() {
+          _stableHoldStartTime = null;
+          _stableCountdownSeconds = 3.0;
+          _stableSampleBuffer.clear();
+        });
+      }
+      return;
+    }
+
+    _stableHoldStartTime ??= DateTime.now();
+    _stableSampleBuffer.add(result);
+
+    final double elapsed = DateTime.now().difference(_stableHoldStartTime!).inMilliseconds / 1000.0;
+    final double remaining = (3.0 - elapsed).clamp(0.0, 3.0);
+
+    if ((remaining - _stableCountdownSeconds).abs() > 0.05) {
+      setState(() {
+        _stableCountdownSeconds = remaining;
+      });
+    }
+
+    if (elapsed >= 3.0 && !_isAutoCompleting) {
+      _isAutoCompleting = true;
+      HapticFeedback.heavyImpact();
+
+      // Average the 3-second sample buffer to produce a rock-solid clinical score
+      double totalAngle = 0;
+      double totalCva = 0;
+      for (final sample in _stableSampleBuffer) {
+        totalAngle += sample.angle;
+        totalCva += sample.cvaAngle;
+      }
+      final double avgAngle = _stableSampleBuffer.isNotEmpty ? (totalAngle / _stableSampleBuffer.length) : result.angle;
+      final double avgCva = _stableSampleBuffer.isNotEmpty ? (totalCva / _stableSampleBuffer.length) : result.cvaAngle;
+
+      _currentResult = NeckAngleResult(
+        angle: avgAngle,
+        cvaAngle: avgCva,
+        riskLevel: NeckAngleCalculator.classifyRisk(avgAngle),
+        earSide: result.earSide,
+        earConfidence: result.earConfidence,
+        shoulderConfidence: result.shoulderConfidence,
+        isSideProfile: true,
+        earPoint: result.earPoint,
+        shoulderPoint: result.shoulderPoint,
+        hipPoint: result.hipPoint,
+        hasHip: result.hasHip,
+        torsoAngle: result.torsoAngle,
+        spinePlumbAngle: result.spinePlumbAngle,
+        rawDeltaX: result.rawDeltaX,
+        rawDeltaY: result.rawDeltaY,
+      );
+
+      // Auto-stop and trigger summary
+      _endSession();
+    }
+  }
+
+  void _handleDeskMonitorAlert(NeckAngleResult result) {
+    if (result.riskLevel == RiskLevel.critical) {
+      _badPostureStartTime ??= DateTime.now();
+
+      if (!_isAlertShowing &&
+          DateTime.now().difference(_badPostureStartTime!).inSeconds >= 5) {
+        _showRemedyAlert();
+      }
+    } else {
+      _badPostureStartTime = null;
+    }
+  }
+
   /// Ends the posture scanning session.
   ///
   /// Tells Member 1's LiveCameraStream to stop streaming.
   Future<void> _endSession() async {
     _webCalculationTimer?.cancel();
     _webCalculationTimer = null;
+    _watchdogTimer?.cancel();
+    _watchdogTimer = null;
 
     // Tell Member 1 to stop streaming
     await _cameraKey.currentState?.stopStreaming();
@@ -200,6 +331,9 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
     if (mounted) {
       setState(() {
         _isSessionActive = false;
+        _isAutoCompleting = false;
+        _isMonitoringPaused = false;
+        _stableHoldStartTime = null;
       });
     }
 
@@ -228,52 +362,17 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
 
   /// This is the callback that connects Member 1's output to Member 2's
   /// input. It is passed to [LiveCameraStream.onPoseDetected].
-  ///
-  /// Flow:
-  /// ```
-  /// Pose (from Member 1)
-  ///   → NeckAngleCalculator.calculateNeckAngle(pose) [Member 2's math]
-  ///   → setState() → PostureResultOverlay re-renders [Member 2's UI]
-  /// ```
   void _onPoseDetected(Pose pose) {
-    // Guard: ignore poses if session is not active
     if (!_isSessionActive) return;
 
     _frameCount++;
 
-    // ── Call Member 2's Calculator ──
     final NeckAngleResult? result =
         NeckAngleCalculator.calculateNeckAngle(pose);
 
     if (result != null && mounted) {
-      setState(() {
-        _currentResult = result;
-      });
+      _processPoseResult(result);
 
-      // ── Bad Posture 5-Second Tracking ──
-      if (_currentResult?.riskLevel == RiskLevel.critical) {
-        _badPostureStartTime ??= DateTime.now();
-
-        if (!_isAlertShowing &&
-            DateTime.now().difference(_badPostureStartTime!) >=
-                const Duration(seconds: 5)) {
-          _showRemedyAlert();
-        }
-      } else {
-        // Reset if posture improves
-        _badPostureStartTime = null;
-        if (_isAlertShowing) {
-          _isAlertShowing = false;
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        }
-      }
-
-      // ── Haptic Feedback on Risk Transitions ──
-      if (_currentResult?.riskLevel == RiskLevel.critical) {
-        HapticFeedback.mediumImpact();
-      }
-
-      // Debug: print every 30th frame to avoid console flooding
       if (_frameCount % 30 == 0) {
         debugPrint(
           '[Integration] Frame #$_frameCount → $result',
@@ -465,6 +564,24 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
           ),
         ),
         actions: [
+          // ── Dual Mode Switcher Pill ──
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.all(2.5),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white24, width: 0.8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildModeChip(ScanMode.quickScan, 'Quick 3s', Icons.timer_outlined),
+                _buildModeChip(ScanMode.deskMonitor, 'Monitor', Icons.laptop_chromebook),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
           IconButton(
             tooltip: 'Positioning Guide',
             icon: const Icon(Icons.help_outline_rounded, color: Colors.white70),
@@ -705,7 +822,34 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
               ),
             ),
 
-          // ── Layer 2c: Guidance Prompt if facing forward ──
+          // ── Layer 2c: Quick Scan 3-Second Stability Auto-Capture Indicator ──
+          if (_isSessionActive && _scanMode == ScanMode.quickScan)
+            Positioned(
+              top: 14,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _buildQuickScanIndicator(),
+              ),
+            ),
+
+          // ── Layer 2d: Desk Monitor Status / Paused Banner ──
+          if (_isSessionActive && _scanMode == ScanMode.deskMonitor && _isMonitoringPaused)
+            Positioned(
+              top: 72,
+              left: 20,
+              right: 20,
+              child: _buildDeskMonitorPausedBanner(),
+            ),
+
+          if (_isSessionActive && _scanMode == ScanMode.deskMonitor && !_isMonitoringPaused)
+            Positioned(
+              top: 16,
+              left: 16,
+              child: _buildDeskMonitorActivePill(),
+            ),
+
+          // ── Layer 2e: Guidance Prompt if facing forward ──
           if (_isSessionActive && _currentResult != null && !_currentResult!.isSideProfile)
             Positioned(
               top: 64,
@@ -734,7 +878,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
             ),
 
           // ── Layer 3: Frame Counter (Debug) ──
-          if (_isSessionActive && _frameCount > 0)
+          if (_isSessionActive && _frameCount > 0 && _scanMode == ScanMode.quickScan)
             Positioned(
               top: 16,
               left: 16,
@@ -818,53 +962,73 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
   }
 
   Widget _buildStartSessionButton() {
-    return Row(
+    final bool isQuick = _scanMode == ScanMode.quickScan;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          flex: 3,
-          child: SizedBox(
-            height: 56,
-            child: ElevatedButton.icon(
-              onPressed: _requestStartSession,
-              icon: const Icon(Icons.play_arrow_rounded, size: 26),
-              label: const Text(
-                'Live Posture Scan',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1AD4AE),
-                foregroundColor: const Color(0xFF0F1118),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 8,
-                shadowColor: const Color(0xFF1AD4AE).withValues(alpha: 0.4),
-              ),
-            ),
+        // Mode explanatory hint
+        Text(
+          isQuick
+              ? "⚡ Quick Scan: Automatically captures when side profile is held steady for 3s"
+              : "🖥️ Desk Monitor: Continuous tracking with auto-pause if you leave the camera",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: SizedBox(
-            height: 56,
-            child: OutlinedButton.icon(
-              onPressed: _requestSnapshotScan,
-              icon: const Icon(Icons.camera_alt_rounded, size: 20),
-              label: const Text(
-                'Snapshot',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF1AD4AE),
-                side: const BorderSide(color: Color(0xFF1AD4AE), width: 1.5),
-                backgroundColor: const Color(0xFF1AD4AE).withValues(alpha: 0.08),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: SizedBox(
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: _requestStartSession,
+                  icon: Icon(isQuick ? Icons.timer_rounded : Icons.laptop_chromebook_rounded, size: 24),
+                  label: Text(
+                    isQuick ? 'Start 3s Quick Scan' : 'Start Desk Monitor',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1AD4AE),
+                    foregroundColor: const Color(0xFF0F1118),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 8,
+                    shadowColor: const Color(0xFF1AD4AE).withValues(alpha: 0.4),
+                  ),
                 ),
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: SizedBox(
+                height: 56,
+                child: OutlinedButton.icon(
+                  onPressed: _requestSnapshotScan,
+                  icon: const Icon(Icons.camera_alt_rounded, size: 20),
+                  label: const Text(
+                    'Snapshot',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF1AD4AE),
+                    side: const BorderSide(color: Color(0xFF1AD4AE), width: 1.5),
+                    backgroundColor: const Color(0xFF1AD4AE).withValues(alpha: 0.08),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -877,9 +1041,9 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
       child: ElevatedButton.icon(
         onPressed: _endSession,
         icon: const Icon(Icons.stop_rounded, size: 28),
-        label: const Text(
-          'End Session',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        label: Text(
+          _scanMode == ScanMode.quickScan ? 'Cancel Scan' : 'End Session',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFE64545),
@@ -890,6 +1054,189 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
           elevation: 8,
           shadowColor: const Color(0xFFE64545).withValues(alpha: 0.4),
         ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Dual Mode UI Helpers
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Widget _buildModeChip(ScanMode mode, String label, IconData icon) {
+    final bool isSelected = _scanMode == mode;
+    return GestureDetector(
+      onTap: () {
+        if (_scanMode != mode) {
+          setState(() {
+            _scanMode = mode;
+            _stableHoldStartTime = null;
+            _stableCountdownSeconds = 3.0;
+            _stableSampleBuffer.clear();
+          });
+          if (mode == ScanMode.deskMonitor && _isSessionActive) {
+            _startWatchdogTimer();
+          } else {
+            _watchdogTimer?.cancel();
+          }
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF1AD4AE) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: isSelected ? const Color(0xFF0F1118) : Colors.white70,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF0F1118) : Colors.white70,
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickScanIndicator() {
+    final bool isAligned = _currentResult?.isSideProfile ?? false;
+    final bool isHolding = isAligned && _stableHoldStartTime != null;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F1118).withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isHolding ? const Color(0xFF1AE67A) : const Color(0xFFFF9F43),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (isHolding ? const Color(0xFF1AE67A) : const Color(0xFFFF9F43))
+                .withValues(alpha: 0.35),
+            blurRadius: 14,
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isHolding)
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                value: (3.0 - _stableCountdownSeconds) / 3.0,
+                strokeWidth: 3,
+                backgroundColor: Colors.white24,
+                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF1AE67A)),
+              ),
+            )
+          else
+            const Icon(Icons.timer_outlined, size: 18, color: Color(0xFFFF9F43)),
+          const SizedBox(width: 8),
+          Text(
+            !isAligned
+                ? "Turn sideways to begin 3s auto-capture"
+                : (_stableCountdownSeconds <= 0.2
+                    ? "📸 Capturing Posture..."
+                    : "Hold steady: ${_stableCountdownSeconds.toStringAsFixed(1)}s"),
+            style: TextStyle(
+              color: isHolding ? const Color(0xFF1AE67A) : const Color(0xFFFF9F43),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              fontFamily: isHolding ? 'monospace' : 'Inter',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeskMonitorPausedBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1D2E).withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFF9F43), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.6),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.pause_circle_filled_rounded, color: Color(0xFFFF9F43), size: 28),
+          SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "Monitoring Auto-Paused (User Away)",
+                  style: TextStyle(
+                    color: Color(0xFFFF9F43),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  "No person detected in frame. Return in front of the camera to resume automatically.",
+                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeskMonitorActivePill() {
+    final int minutes = _sessionStartTime != null
+        ? DateTime.now().difference(_sessionStartTime!).inMinutes
+        : 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F1118).withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF60A5FA).withValues(alpha: 0.6)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.laptop_chromebook, size: 14, color: Color(0xFF60A5FA)),
+          const SizedBox(width: 6),
+          Text(
+            "Desk Monitor Active • ${minutes}m",
+            style: const TextStyle(
+              color: Color(0xFF60A5FA),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
