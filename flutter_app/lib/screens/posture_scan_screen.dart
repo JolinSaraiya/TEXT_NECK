@@ -30,8 +30,10 @@ import '../camera/live_camera_stream.dart';
 // ── Member 2's deliverables ──
 import '../posture/neck_angle_calculator.dart';
 import '../posture/posture_result_overlay.dart';
+import '../posture/cva_angle_painter.dart';
 import '../services/posture_history_manager.dart';
 import '../services/pdf_report_service.dart';
+import '../widgets/scan_rules_dialog.dart';
 
 /// The main posture scanning screen that integrates:
 /// - [LiveCameraStream] (Member 1): Camera preview + ML Kit pose detection
@@ -327,7 +329,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: BorderSide(
-            color: Colors.white.withOpacity(0.08),
+            color: Colors.white.withValues(alpha: 0.08),
           ),
         ),
         title: const Text(
@@ -397,7 +399,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.white.withValues(alpha: 0.5),
               fontSize: 13,
               fontFamily: 'Inter',
             ),
@@ -437,16 +439,24 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Positioning Guide',
+            icon: const Icon(Icons.help_outline_rounded, color: Colors.white70),
+            onPressed: () => ScanRulesDialog.show(
+              context,
+              onProceed: () {},
+            ),
+          ),
           // ── Live Indicator ──
           if (_isSessionActive)
             Container(
               margin: const EdgeInsets.only(right: 12),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFE64545).withOpacity(0.2),
+                color: const Color(0xFFE64545).withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: const Color(0xFFE64545).withOpacity(0.5),
+                  color: const Color(0xFFE64545).withValues(alpha: 0.5),
                 ),
               ),
               child: Row(
@@ -488,6 +498,71 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
               onPoseDetected: _onPoseDetected, // ← THE BRIDGE
             ),
           ),
+
+          // ── Layer 1b: Biomechanical Angle & Vector Painter ──
+          if (_isSessionActive && _currentResult != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: CvaAnglePainter(
+                    angle: _currentResult!.angle,
+                    riskLevel: _currentResult!.riskLevel,
+                    isSideProfile: _currentResult!.isSideProfile,
+                  ),
+                ),
+              ),
+            ),
+
+          // ── Layer 1c: Biomechanical Formula HUD Card ──
+          if (_isSessionActive && _currentResult != null)
+            Positioned(
+              top: 56,
+              left: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F1118).withValues(alpha: 0.82),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _currentResult!.riskLevel.color.withValues(alpha: 0.6),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.straighten_rounded, size: 14, color: _currentResult!.riskLevel.color),
+                        const SizedBox(width: 6),
+                        Text(
+                          "CVA = arctan(Δy / Δx) = ${_currentResult!.angle.toStringAsFixed(1)}°",
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'monospace',
+                            color: _currentResult!.riskLevel.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      "Angle from Horizontal → Tragus to Shoulder",
+                      style: TextStyle(fontSize: 9, color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
           // ── Layer 2: Posture Overlay (Member 2) ──
           if (_currentResult != null)
@@ -631,6 +706,22 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
   // Snapshot & Buttons
   // ═══════════════════════════════════════════════════════════════════════
 
+  void _requestStartSession() {
+    ScanRulesDialog.show(
+      context,
+      onProceed: _startSession,
+      isSnapshot: false,
+    );
+  }
+
+  void _requestSnapshotScan() {
+    ScanRulesDialog.show(
+      context,
+      onProceed: _takeSnapshotScan,
+      isSnapshot: true,
+    );
+  }
+
   void _takeSnapshotScan() {
     if (!_isSessionActive) {
       _startSession();
@@ -651,7 +742,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
           child: SizedBox(
             height: 56,
             child: ElevatedButton.icon(
-              onPressed: _startSession,
+              onPressed: _requestStartSession,
               icon: const Icon(Icons.play_arrow_rounded, size: 26),
               label: const Text(
                 'Live Posture Scan',
@@ -675,7 +766,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
           child: SizedBox(
             height: 56,
             child: OutlinedButton.icon(
-              onPressed: _takeSnapshotScan,
+              onPressed: _requestSnapshotScan,
               icon: const Icon(Icons.camera_alt_rounded, size: 20),
               label: const Text(
                 'Snapshot',

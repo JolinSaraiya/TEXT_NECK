@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_colors.dart';
+import '../theme/theme_controller.dart';
 import '../widgets/exercise_detail_sheet.dart';
 import 'posture_scan_screen.dart'; // From team member's code!
 import '../services/posture_history_manager.dart';
@@ -25,6 +26,7 @@ class DashboardView extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final displayName = user?.displayName ?? user?.email?.split('@').first ?? 'User';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AnimatedBuilder(
       animation: PostureHistoryManager(),
@@ -40,7 +42,7 @@ class DashboardView extends StatelessWidget {
         final int totalSessionsVal = manager.totalSessions;
 
         return Container(
-          color: AppColors.background,
+          color: AppColors.bg(context),
           child: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
@@ -58,7 +60,7 @@ class DashboardView extends StatelessWidget {
                             'Hello,',
                             style: GoogleFonts.inter(
                               fontSize: 14,
-                              color: AppColors.textSecondary,
+                              color: AppColors.subtext(context),
                             ),
                           ),
                           Text(
@@ -66,18 +68,36 @@ class DashboardView extends StatelessWidget {
                             style: GoogleFonts.inter(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
+                              color: AppColors.text(context),
                             ),
                           ),
                         ],
                       ),
-                      GestureDetector(
-                        onTap: onProfileTap,
-                        child: CircleAvatar(
-                          radius: 24,
-                          backgroundColor: AppColors.surfaceLight,
-                          child: const Icon(Icons.person, color: AppColors.primaryAccent),
-                        ),
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: () => ThemeController.instance.toggleTheme(),
+                            icon: Icon(
+                              isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                              color: AppColors.text(context),
+                              size: 22,
+                            ),
+                            tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+                            style: IconButton.styleFrom(
+                              backgroundColor: AppColors.surfLight(context),
+                              padding: const EdgeInsets.all(10),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: onProfileTap,
+                            child: CircleAvatar(
+                              radius: 22,
+                              backgroundColor: AppColors.surfLight(context),
+                              child: const Icon(Icons.person, color: AppColors.primaryAccent),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -87,9 +107,18 @@ class DashboardView extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: AppColors.surf(context),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.surfaceLight, width: 1),
+                      border: Border.all(color: AppColors.border(context), width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.3)
+                              : Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,7 +129,7 @@ class DashboardView extends StatelessWidget {
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.5,
-                            color: AppColors.textSecondary,
+                            color: AppColors.subtext(context),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -137,7 +166,7 @@ class DashboardView extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(4),
                                 child: LinearProgressIndicator(
                                   value: progressValue,
-                                  backgroundColor: AppColors.surfaceLight,
+                                  backgroundColor: AppColors.surfLight(context),
                                   valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryAccent),
                                   minHeight: 8,
                                 ),
@@ -161,7 +190,7 @@ class DashboardView extends StatelessWidget {
                               : 'Good posture! Keep maintaining your spine alignment.',
                           style: GoogleFonts.inter(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: AppColors.subtext(context),
                           ),
                         ),
                       ],
@@ -172,11 +201,11 @@ class DashboardView extends StatelessWidget {
                   // Stats Row
                   Row(
                     children: [
-                      _buildStatCard('🔥', '$streakVal', 'days\nStreak'),
+                      _buildStatCard(context, '🔥', '$streakVal', 'days\nStreak'),
                       const SizedBox(width: 12),
-                      _buildStatCard('📊', '$avgScoreVal%', '\nAvg Score'),
+                      _buildStatCard(context, '📊', '$avgScoreVal%', '\nAvg Score'),
                       const SizedBox(width: 12),
-                      _buildStatCard('✅', '$totalSessionsVal', 'total\nSessions'),
+                      _buildStatCard(context, '✅', '$totalSessionsVal', 'total\nSessions'),
                     ],
                   ),
                   const SizedBox(height: 32),
@@ -187,7 +216,7 @@ class DashboardView extends StatelessWidget {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primaryAccent.withOpacity(0.3),
+                          color: AppColors.primaryAccent.withValues(alpha: 0.3),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -239,7 +268,7 @@ class DashboardView extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: AppColors.text(context),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -296,7 +325,7 @@ class DashboardView extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: AppColors.text(context),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -304,6 +333,7 @@ class DashboardView extends StatelessWidget {
                     ...manager.history.map((result) {
                       final scoreText = '${100 - result.riskScore}%';
                       return _buildSessionItem(
+                        context,
                         _formatDateTime(result.timestamp),
                         result.riskLevel.shortLabel,
                         scoreText,
@@ -311,9 +341,9 @@ class DashboardView extends StatelessWidget {
                       );
                     })
                   else ...[
-                    _buildSessionItem('Today, 9:14 AM', 'Good', '82%', AppColors.riskLow),
-                    _buildSessionItem('Yesterday, 6:30 PM', 'Fair', '71%', AppColors.riskModerate),
-                    _buildSessionItem('Jul 10, 8:00 AM', 'Good', '78%', AppColors.riskLow),
+                    _buildSessionItem(context, 'Today, 9:14 AM', 'Good', '82%', AppColors.riskLow),
+                    _buildSessionItem(context, 'Yesterday, 6:30 PM', 'Fair', '71%', AppColors.riskModerate),
+                    _buildSessionItem(context, 'Jul 10, 8:00 AM', 'Good', '78%', AppColors.riskLow),
                   ],
                   
                   const SizedBox(height: 100), // padding for the bottom nav bar
@@ -326,13 +356,14 @@ class DashboardView extends StatelessWidget {
     );
   }
 
-  Widget _buildStatCard(String emoji, String value, String label) {
+  Widget _buildStatCard(BuildContext context, String emoji, String value, String label) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.surf(context),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border(context), width: 1),
         ),
         child: Column(
           children: [
@@ -347,14 +378,14 @@ class DashboardView extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: AppColors.text(context),
                     ),
                   ),
                   TextSpan(
                     text: label,
                     style: GoogleFonts.inter(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: AppColors.subtext(context),
                     ),
                   ),
                 ],
@@ -381,8 +412,9 @@ class DashboardView extends StatelessWidget {
         width: 140,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.surf(context),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border(context), width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -394,7 +426,7 @@ class DashboardView extends StatelessWidget {
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                color: AppColors.text(context),
               ),
             ),
             const SizedBox(height: 4),
@@ -412,7 +444,7 @@ class DashboardView extends StatelessWidget {
     );
   }
 
-  Widget _buildSessionItem(String date, String status, String score, Color statusColor) {
+  Widget _buildSessionItem(BuildContext context, String date, String status, String score, Color statusColor) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20.0),
       child: Row(
@@ -426,7 +458,7 @@ class DashboardView extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColors.text(context),
                 ),
               ),
               const SizedBox(height: 4),
@@ -434,7 +466,7 @@ class DashboardView extends StatelessWidget {
                 'Posture Score',
                 style: GoogleFonts.inter(
                   fontSize: 12,
-                  color: AppColors.textSecondary,
+                  color: AppColors.subtext(context),
                 ),
               ),
             ],
@@ -455,7 +487,7 @@ class DashboardView extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: AppColors.text(context),
                 ),
               ),
             ],

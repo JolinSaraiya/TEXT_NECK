@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'screens/auth_wrapper.dart';
+import 'theme/theme_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,13 +19,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'AI Text Neck',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const AuthWrapper(),
+    return AnimatedBuilder(
+      animation: ThemeController.instance,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'AI Text Neck',
+          debugShowCheckedModeBanner: false,
+          themeMode: ThemeController.instance.themeMode,
+          theme: ThemeController.instance.lightTheme,
+          darkTheme: ThemeController.instance.darkTheme,
+          home: const AuthWrapper(),
+        );
+      },
     );
   }
 }
-

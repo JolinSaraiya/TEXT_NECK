@@ -34,8 +34,10 @@ class _HomeScreenState extends State<HomeScreen> {
       const ProfileScreen(),
     ];
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.bg(context),
       body: Stack(
         children: [
           // The current screen
@@ -46,45 +48,47 @@ class _HomeScreenState extends State<HomeScreen> {
             bottom: 30,
             left: 20,
             right: 20,
-            child: _buildFloatingNavBar(),
+            child: _buildFloatingNavBar(context, isDark),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFloatingNavBar() {
+  Widget _buildFloatingNavBar(BuildContext context, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surf(context),
         borderRadius: BorderRadius.circular(40),
         border: Border.all(
-          color: AppColors.surfaceLight,
+          color: AppColors.border(context),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
-            blurRadius: 30,
-            offset: const Offset(0, 10),
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.45)
+                : Colors.black.withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildNavItem(0, Icons.grid_view_rounded, 'Home'),
-          _buildNavItem(1, Icons.photo_camera_rounded, 'Camera'),
-          _buildNavItem(2, Icons.analytics_rounded, 'Results'),
-          _buildNavItem(3, Icons.fitness_center_rounded, 'Exercise'),
-          _buildNavItem(4, Icons.person_rounded, 'Profile'),
+          _buildNavItem(0, Icons.grid_view_rounded, 'Home', context),
+          _buildNavItem(1, Icons.photo_camera_rounded, 'Camera', context),
+          _buildNavItem(2, Icons.analytics_rounded, 'Results', context),
+          _buildNavItem(3, Icons.fitness_center_rounded, 'Exercise', context),
+          _buildNavItem(4, Icons.person_rounded, 'Profile', context),
         ],
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
+  Widget _buildNavItem(int index, IconData icon, String label, BuildContext context) {
     final isSelected = _selectedIndex == index;
 
     return GestureDetector(
@@ -107,7 +111,9 @@ class _HomeScreenState extends State<HomeScreen> {
             Icon(
               icon,
               size: 20,
-              color: isSelected ? Colors.black : AppColors.textSecondary,
+              color: isSelected
+                  ? Colors.black
+                  : AppColors.subtext(context),
             ),
             if (isSelected) ...[
               const SizedBox(width: 6),

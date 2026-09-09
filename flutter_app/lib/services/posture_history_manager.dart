@@ -104,7 +104,7 @@ class PostureHistoryManager extends ChangeNotifier {
         .snapshots()
         .listen((snapshot) {
       _history = snapshot.docs
-          .map((doc) => PostureSessionResult.fromMap(doc.data() as Map<String, dynamic>))
+          .map((doc) => PostureSessionResult.fromMap(doc.data()))
           .toList();
       notifyListeners();
     });

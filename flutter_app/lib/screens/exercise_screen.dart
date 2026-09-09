@@ -88,7 +88,7 @@ class ExerciseScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.background,
+      color: AppColors.bg(context),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24.0, 24.0, 24.0, 0),
@@ -100,7 +100,7 @@ class ExerciseScreen extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: AppColors.text(context),
                 ),
               ),
               const SizedBox(height: 8),
@@ -108,7 +108,7 @@ class ExerciseScreen extends StatelessWidget {
                 'Daily routines to fix your text neck.',
                 style: GoogleFonts.inter(
                   fontSize: 14,
-                  color: AppColors.textSecondary,
+                  color: AppColors.subtext(context),
                 ),
               ),
               const SizedBox(height: 24),
@@ -133,10 +133,10 @@ class ExerciseScreen extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surf(context),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: AppColors.surfaceLight,
+          color: AppColors.border(context),
           width: 1,
         ),
       ),
@@ -162,7 +162,7 @@ class ExerciseScreen extends StatelessWidget {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceLight,
+                    color: AppColors.surfLight(context),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   alignment: Alignment.center,
@@ -182,7 +182,7 @@ class ExerciseScreen extends StatelessWidget {
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
+                          color: AppColors.text(context),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -192,15 +192,15 @@ class ExerciseScreen extends StatelessWidget {
                             exercise.category,
                             style: GoogleFonts.inter(
                               fontSize: 12,
-                              color: AppColors.textSecondary,
+                              color: AppColors.subtext(context),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Container(
                             width: 3,
                             height: 3,
-                            decoration: const BoxDecoration(
-                              color: AppColors.textSecondary,
+                            decoration: BoxDecoration(
+                              color: AppColors.subtext(context),
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -219,10 +219,10 @@ class ExerciseScreen extends StatelessWidget {
                   ),
                 ),
                 // Arrow Icon
-                const Icon(
+                Icon(
                   Icons.arrow_forward_ios_rounded,
                   size: 16,
-                  color: AppColors.textSecondary,
+                  color: AppColors.subtext(context),
                 ),
               ],
             ),

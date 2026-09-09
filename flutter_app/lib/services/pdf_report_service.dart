@@ -93,7 +93,7 @@ class PdfReportService {
             children: [
               pw.Text(
                 "TEXT NECK AI CLINICAL ASSESSMENT",
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                   fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
                   color: PdfColors.blue800,
@@ -146,7 +146,7 @@ class PdfReportService {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text("Subject / User: $name", style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+          pw.Text("Subject / User: $name", style: const pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
           pw.Text("Evaluation Method: Computer Vision CVA Analysis", style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800)),
         ],
       ),
@@ -175,7 +175,7 @@ class PdfReportService {
             children: [
               pw.Text(
                 "CRANIOVERTEBRAL ANGLE (CVA)",
-                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
+                style: const pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
               ),
               pw.Container(
                 padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -185,7 +185,7 @@ class PdfReportService {
                 ),
                 child: pw.Text(
                   riskLevel.label.toUpperCase(),
-                  style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                  style: const pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                 ),
               ),
             ],
@@ -202,7 +202,7 @@ class PdfReportService {
               pw.Expanded(
                 child: pw.Text(
                   riskCategory,
-                  style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.grey900),
+                  style: const pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.grey900),
                 ),
               ),
             ],
@@ -221,7 +221,7 @@ class PdfReportService {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text("Clinical Reference Standards", style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+        pw.Text("Clinical Reference Standards", style: const pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 6),
         pw.Table(
           border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.8),

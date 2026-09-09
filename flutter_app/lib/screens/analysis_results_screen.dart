@@ -72,8 +72,10 @@ class AnalysisResultsScreen extends StatelessWidget {
           spots = newSpots;
         }
 
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
         return Container(
-          color: AppColors.background,
+          color: AppColors.bg(context),
           child: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
@@ -92,7 +94,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                                 Navigator.pop(context);
                               }
                             },
-                            child: const Icon(Icons.arrow_back, color: Colors.white),
+                            child: Icon(Icons.arrow_back, color: AppColors.text(context)),
                           ),
                           const SizedBox(width: 16),
                           Column(
@@ -103,14 +105,14 @@ class AnalysisResultsScreen extends StatelessWidget {
                                 style: GoogleFonts.inter(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
+                                  color: AppColors.text(context),
                                 ),
                               ),
                               Text(
                                 dateText,
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
-                                  color: AppColors.textSecondary,
+                                  color: AppColors.subtext(context),
                                 ),
                               ),
                             ],
@@ -143,9 +145,18 @@ class AnalysisResultsScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: AppColors.surf(context),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.surfaceLight, width: 1),
+                      border: Border.all(color: AppColors.border(context), width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.3)
+                              : Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,7 +174,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 1.5,
-                                    color: AppColors.textSecondary,
+                                    color: AppColors.subtext(context),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -175,7 +186,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                                       style: GoogleFonts.inter(
                                         fontSize: 48,
                                         fontWeight: FontWeight.w800,
-                                        color: AppColors.textPrimary,
+                                        color: AppColors.text(context),
                                         height: 1.0,
                                       ),
                                     ),
@@ -196,7 +207,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: riskColor.withOpacity(0.2),
+                                    color: riskColor.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
@@ -220,7 +231,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                                   CircularProgressIndicator(
                                     value: 1.0,
                                     strokeWidth: 8,
-                                    color: AppColors.surfaceLight,
+                                    color: AppColors.surfLight(context),
                                   ),
                                   CircularProgressIndicator(
                                     value: riskScoreValue / 100.0,
@@ -245,11 +256,11 @@ class AnalysisResultsScreen extends StatelessWidget {
                         // Gradient Bar
                         Row(
                           children: [
-                            Expanded(child: _buildGradientBarSegment(AppColors.riskLow, 'Low')),
+                            Expanded(child: _buildGradientBarSegment(context, AppColors.riskLow, 'Low')),
                             const SizedBox(width: 4),
-                            Expanded(child: _buildGradientBarSegment(AppColors.riskModerate, 'Moderate')),
+                            Expanded(child: _buildGradientBarSegment(context, AppColors.riskModerate, 'Moderate')),
                             const SizedBox(width: 4),
-                            Expanded(child: _buildGradientBarSegment(AppColors.riskHigh, 'High')),
+                            Expanded(child: _buildGradientBarSegment(context, AppColors.riskHigh, 'High')),
                           ],
                         ),
                       ],
@@ -262,6 +273,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _buildMetricCard(
+                          context,
                           'NECK ANGLE',
                           neckAngleValue.toStringAsFixed(1),
                           '°',
@@ -273,6 +285,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                       const SizedBox(width: 16),
                       Expanded(
                         child: _buildMetricCard(
+                          context,
                           'SPINE LOAD',
                           spineLoadValue.toStringAsFixed(1),
                           ' kg',
@@ -289,9 +302,9 @@ class AnalysisResultsScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: AppColors.surf(context),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.surfaceLight, width: 1),
+                      border: Border.all(color: AppColors.border(context), width: 1),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,7 +314,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+                            color: AppColors.text(context),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -311,7 +324,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                             : 'Your neck is tilted at 34.2°, causing approximately 27.0kg of stress on your cervical spine — roughly 5.4x its normal load. This increases your risk of text neck syndrome if sustained.',
                           style: GoogleFonts.inter(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: AppColors.subtext(context),
                             height: 1.5,
                           ),
                         ),
@@ -329,7 +342,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
+                          color: AppColors.text(context),
                         ),
                       ),
                       Text(
@@ -349,9 +362,18 @@ class AnalysisResultsScreen extends StatelessWidget {
                     height: 180,
                     padding: const EdgeInsets.only(top: 24, right: 24, bottom: 10),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: AppColors.surf(context),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.surfaceLight, width: 1),
+                      border: Border.all(color: AppColors.border(context), width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.3)
+                              : Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: LineChart(
                       LineChartData(
@@ -361,15 +383,15 @@ class AnalysisResultsScreen extends StatelessWidget {
                           horizontalInterval: 20,
                           getDrawingHorizontalLine: (value) {
                             return FlLine(
-                              color: AppColors.surfaceLight,
+                              color: AppColors.surfLight(context),
                               strokeWidth: 1,
                             );
                           },
                         ),
                         titlesData: FlTitlesData(
                           show: true,
-                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                           bottomTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
@@ -382,7 +404,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                                     child: Text(
                                       'S${value.toInt() + 1}',
                                       style: GoogleFonts.inter(
-                                        color: AppColors.textSecondary,
+                                        color: AppColors.subtext(context),
                                         fontSize: 10,
                                       ),
                                     ),
@@ -395,7 +417,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                                     child: Text(
                                       days[value.toInt()],
                                       style: GoogleFonts.inter(
-                                        color: AppColors.textSecondary,
+                                        color: AppColors.subtext(context),
                                         fontSize: 10,
                                       ),
                                     ),
@@ -413,7 +435,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                                 return Text(
                                   value.toInt().toString(),
                                   style: GoogleFonts.inter(
-                                    color: AppColors.textSecondary,
+                                    color: AppColors.subtext(context),
                                     fontSize: 10,
                                   ),
                                   textAlign: TextAlign.left,
@@ -435,13 +457,13 @@ class AnalysisResultsScreen extends StatelessWidget {
                             color: AppColors.primaryAccent,
                             barWidth: 3,
                             isStrokeCapRound: true,
-                            dotData: FlDotData(show: true),
+                            dotData: const FlDotData(show: true),
                             belowBarData: BarAreaData(
                               show: true,
                               gradient: LinearGradient(
                                 colors: [
-                                  AppColors.primaryAccent.withOpacity(0.3),
-                                  AppColors.primaryAccent.withOpacity(0.0),
+                                  AppColors.primaryAccent.withValues(alpha: 0.3),
+                                  AppColors.primaryAccent.withValues(alpha: 0.0),
                                 ],
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
@@ -463,7 +485,7 @@ class AnalysisResultsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildGradientBarSegment(Color color, String label) {
+  Widget _buildGradientBarSegment(BuildContext context, Color color, String label) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -479,20 +501,20 @@ class AnalysisResultsScreen extends StatelessWidget {
           label,
           style: GoogleFonts.inter(
             fontSize: 10,
-            color: AppColors.textSecondary,
+            color: AppColors.subtext(context),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildMetricCard(String title, String value, String unit, Color valueColor, String subtitle, Color subColor) {
+  Widget _buildMetricCard(BuildContext context, String title, String value, String unit, Color valueColor, String subtitle, Color subColor) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surf(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.surfaceLight, width: 1),
+        border: Border.all(color: AppColors.border(context), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,7 +525,7 @@ class AnalysisResultsScreen extends StatelessWidget {
               fontSize: 10,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.2,
-              color: AppColors.textSecondary,
+              color: AppColors.subtext(context),
             ),
           ),
           const SizedBox(height: 8),
