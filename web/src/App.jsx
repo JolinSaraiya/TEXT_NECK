@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import PatientDetail from './pages/PatientDetail';
+import LiveMonitor from './pages/LiveMonitor';
 
 function App() {
   return (
@@ -13,6 +14,8 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/patient/:id" element={<PatientDetail />} />
+            {/* Live posture monitoring page with camera + AI analysis */}
+            <Route path="/monitor" element={<LiveMonitor />} />
             {/* Additional routes like /settings could go here */}
           </Routes>
         </main>

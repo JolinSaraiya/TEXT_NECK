@@ -4,3 +4,10 @@ node_modules/
 dist/
 build/
 .expo/
+
+# Python AI Server
+__pycache__/
+*.pyc
+venv/
+.venv/
+

@@ -1,0 +1,16 @@
+# ============================================================================
+# Text Neck AI Server — Python Dependencies
+# ============================================================================
+# Install with: py -m pip install -r requirements.txt
+# ============================================================================
+
+# --- Web Framework ---
+fastapi==0.115.6          # High-performance async web framework
+uvicorn[standard]==0.34.0 # ASGI server with WebSocket support
+
+# --- Computer Vision & AI ---
+opencv-python-headless==4.10.0.84  # OpenCV without GUI (server-safe)
+mediapipe>=1.0.0                    # Google's pose estimation library
+
+# --- Utilities ---
+numpy>=2.0.0              # Numerical operations for angle calculation

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Activity, Users, Settings, LogOut } from 'lucide-react';
+import { Activity, Users, Camera, Settings, LogOut } from 'lucide-react';
 import './Sidebar.css';
 
 const Sidebar = () => {
@@ -19,6 +19,14 @@ const Sidebar = () => {
         >
           <Users size={20} />
           <span>Patients</span>
+        </NavLink>
+        {/* Live Monitor — real-time posture detection with camera + AI */}
+        <NavLink 
+          to="/monitor" 
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          <Camera size={20} />
+          <span>Live Monitor</span>
         </NavLink>
         <NavLink 
           to="/settings" 
