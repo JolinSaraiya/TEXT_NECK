@@ -118,18 +118,23 @@ class NeckAngleResult {
   /// Confidence score of the shoulder landmark used (0.0 – 1.0).
   final double shoulderConfidence;
 
+  /// Whether the user is correctly oriented in side-profile (true) or facing front (false).
+  final bool isSideProfile;
+
   const NeckAngleResult({
     required this.angle,
     required this.riskLevel,
     required this.earSide,
     required this.earConfidence,
     required this.shoulderConfidence,
+    this.isSideProfile = true,
   });
 
   @override
   String toString() =>
       'NeckAngleResult(${angle.toStringAsFixed(1)}°, '
       '${riskLevel.shortLabel}, $earSide side, '
+      'sideProfile: $isSideProfile, '
       'ear: ${(earConfidence * 100).toStringAsFixed(0)}%, '
       'shoulder: ${(shoulderConfidence * 100).toStringAsFixed(0)}%)';
 }
@@ -210,7 +215,22 @@ class NeckAngleCalculator {
   ///   },
   /// )
   /// ```
+  /// Validates whether the detected pose represents a true side-profile.
+  /// When facing forward, both shoulders are separated horizontally.
+  /// In side profile, shoulders overlap horizontally (< 120 pixels or normalized equivalent).
+  static bool isSideProfile(Pose pose) {
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    if (leftShoulder == null || rightShoulder == null) return true; // Single shoulder visible = true side profile
+    final double deltaX = (leftShoulder.x - rightShoulder.x).abs();
+    final bool isNormalized = leftShoulder.x <= 1.0 && rightShoulder.x <= 1.0;
+    final double threshold = isNormalized ? 0.22 : 120.0;
+    return deltaX < threshold;
+  }
+
   static NeckAngleResult? calculateNeckAngle(Pose pose) {
+    final bool sideProfile = isSideProfile(pose);
+
     // ── Try Left Side First ──
     final leftEar = pose.landmarks[PoseLandmarkType.leftEar];
     final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
@@ -232,6 +252,7 @@ class NeckAngleCalculator {
         earSide: 'left',
         earConfidence: leftEar.likelihood,
         shoulderConfidence: leftShoulder.likelihood,
+        isSideProfile: sideProfile,
       );
     }
 
@@ -256,6 +277,7 @@ class NeckAngleCalculator {
         earSide: 'right',
         earConfidence: rightEar.likelihood,
         shoulderConfidence: rightShoulder.likelihood,
+        isSideProfile: sideProfile,
       );
     }
 

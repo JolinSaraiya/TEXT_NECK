@@ -31,6 +31,7 @@ import '../camera/live_camera_stream.dart';
 import '../posture/neck_angle_calculator.dart';
 import '../posture/posture_result_overlay.dart';
 import '../services/posture_history_manager.dart';
+import '../services/pdf_report_service.dart';
 
 /// The main posture scanning screen that integrates:
 /// - [LiveCameraStream] (Member 1): Camera preview + ML Kit pose detection
@@ -355,6 +356,23 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
           ],
         ),
         actions: [
+          ElevatedButton.icon(
+            onPressed: () {
+              PdfReportService.instance.exportPostureReport(
+                angle: result.angle,
+                riskLevel: result.riskLevel,
+              );
+            },
+            icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+            label: const Text('Export Clinical PDF'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1AD4AE),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text(
@@ -479,6 +497,84 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
               earSide: _currentResult!.earSide,
             ),
 
+          // ── Layer 2b: Side-Profile Orientation Indicator ──
+          if (_isSessionActive)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: (_currentResult?.isSideProfile ?? true)
+                      ? const Color(0xFF1AE67A).withValues(alpha: 0.2)
+                      : const Color(0xFFFF9F43).withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: (_currentResult?.isSideProfile ?? true)
+                        ? const Color(0xFF1AE67A)
+                        : const Color(0xFFFF9F43),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      (_currentResult?.isSideProfile ?? true)
+                          ? Icons.check_circle_rounded
+                          : Icons.rotate_right_rounded,
+                      size: 16,
+                      color: (_currentResult?.isSideProfile ?? true)
+                          ? const Color(0xFF1AE67A)
+                          : const Color(0xFFFF9F43),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      (_currentResult?.isSideProfile ?? true)
+                          ? 'Side Profile Aligned'
+                          : 'Turn Sideways',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: (_currentResult?.isSideProfile ?? true)
+                            ? const Color(0xFF1AE67A)
+                            : const Color(0xFFFF9F43),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // ── Layer 2c: Guidance Prompt if facing forward ──
+          if (_isSessionActive && _currentResult != null && !_currentResult!.isSideProfile)
+            Positioned(
+              top: 64,
+              left: 20,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1D2E).withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFF9F43)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Color(0xFFFF9F43), size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Please stand sideways to the camera for clinical Craniovertebral Angle measurement.',
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           // ── Layer 3: Frame Counter (Debug) ──
           if (_isSessionActive && _frameCount > 0)
             Positioned(
@@ -490,13 +586,13 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
+                  color: Colors.black.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   'Frames: $_frameCount',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 12,
                     fontFamily: 'monospace',
                   ),
@@ -510,14 +606,14 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 110), // Increased bottom padding to 110 to clear the pill bar
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 110),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withOpacity(0.85),
+                    Colors.black.withValues(alpha: 0.85),
                   ],
                 ),
               ),
@@ -532,30 +628,71 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Buttons
+  // Snapshot & Buttons
   // ═══════════════════════════════════════════════════════════════════════
 
+  void _takeSnapshotScan() {
+    if (!_isSessionActive) {
+      _startSession();
+    }
+    // Briefly sample/analyze, then automatically freeze and display summary
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (mounted && _isSessionActive) {
+        _endSession();
+      }
+    });
+  }
+
   Widget _buildStartSessionButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton.icon(
-        onPressed: _startSession,
-        icon: const Icon(Icons.play_arrow_rounded, size: 28),
-        label: const Text(
-          'Start Posture Scan',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF1AD4AE),
-          foregroundColor: const Color(0xFF0F1118),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+    return Row(
+      children: [
+        Expanded(
+          flex: 3,
+          child: SizedBox(
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: _startSession,
+              icon: const Icon(Icons.play_arrow_rounded, size: 26),
+              label: const Text(
+                'Live Posture Scan',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1AD4AE),
+                foregroundColor: const Color(0xFF0F1118),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 8,
+                shadowColor: const Color(0xFF1AD4AE).withValues(alpha: 0.4),
+              ),
+            ),
           ),
-          elevation: 8,
-          shadowColor: const Color(0xFF1AD4AE).withOpacity(0.4),
         ),
-      ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: SizedBox(
+            height: 56,
+            child: OutlinedButton.icon(
+              onPressed: _takeSnapshotScan,
+              icon: const Icon(Icons.camera_alt_rounded, size: 20),
+              label: const Text(
+                'Snapshot',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF1AD4AE),
+                side: const BorderSide(color: Color(0xFF1AD4AE), width: 1.5),
+                backgroundColor: const Color(0xFF1AD4AE).withValues(alpha: 0.08),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -577,7 +714,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
             borderRadius: BorderRadius.circular(16),
           ),
           elevation: 8,
-          shadowColor: const Color(0xFFE64545).withOpacity(0.4),
+          shadowColor: const Color(0xFFE64545).withValues(alpha: 0.4),
         ),
       ),
     );

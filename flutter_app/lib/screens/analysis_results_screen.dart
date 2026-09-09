@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../theme/app_colors.dart';
 import '../services/posture_history_manager.dart';
+import '../services/pdf_report_service.dart';
 import '../posture/neck_angle_calculator.dart';
 
 class AnalysisResultsScreen extends StatelessWidget {
@@ -81,35 +82,58 @@ class AnalysisResultsScreen extends StatelessWidget {
                 children: [
                   // Header
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      GestureDetector(
-                        onTap: () {
-                          if (Navigator.canPop(context)) {
-                            Navigator.pop(context);
-                          }
-                        },
-                        child: const Icon(Icons.arrow_back, color: Colors.white),
-                      ),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
                         children: [
-                          Text(
-                            'Analysis Results',
-                            style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
+                          GestureDetector(
+                            onTap: () {
+                              if (Navigator.canPop(context)) {
+                                Navigator.pop(context);
+                              }
+                            },
+                            child: const Icon(Icons.arrow_back, color: Colors.white),
                           ),
-                          Text(
-                            dateText,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
+                          const SizedBox(width: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Analysis Results',
+                                style: GoogleFonts.inter(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                dateText,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
+                      ),
+                      IconButton(
+                        tooltip: 'Export Clinical PDF Report',
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryAccent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.primaryAccent.withValues(alpha: 0.4)),
+                          ),
+                          child: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.primaryAccent, size: 20),
+                        ),
+                        onPressed: () {
+                          PdfReportService.instance.exportPostureReport(
+                            angle: neckAngleValue,
+                            riskLevel: riskLevel,
+                          );
+                        },
                       ),
                     ],
                   ),
