@@ -18,7 +18,6 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -33,6 +32,7 @@ import '../posture/posture_result_overlay.dart';
 import '../posture/cva_angle_painter.dart';
 import '../services/posture_history_manager.dart';
 import '../services/pdf_report_service.dart';
+import '../services/web_pose_bridge.dart';
 import '../widgets/scan_rules_dialog.dart';
 
 /// The main posture scanning screen that integrates:
@@ -117,46 +117,72 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
     _webCalculationTimer?.cancel();
     _webTick = 0;
 
-    // Periodically compute live CVA posture angles for web browser preview
-    _webCalculationTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+    // Periodically fetch real-time computer vision landmarks from MediaPipe on web
+    _webCalculationTimer = Timer.periodic(const Duration(milliseconds: 70), (timer) {
       if (!_isSessionActive || !mounted) {
         timer.cancel();
         return;
       }
 
-      _webTick++;
-      _frameCount++;
+      final webPose = WebPoseBridge.getLatestPose();
 
-      // Natural CVA angle variation across clinical tiers:
-      // Angles > 48°: Good posture
-      // Angles 43°-48°: Fair posture
-      // Angles < 43°: Bad posture
-      final double naturalWave = sin(_webTick * 0.25) * 4.5 + cos(_webTick * 0.6) * 2.0;
-      final double calculatedAngle = double.parse((48.2 + naturalWave).clamp(38.0, 56.0).toStringAsFixed(1));
-      final RiskLevel risk = NeckAngleCalculator.classifyRisk(calculatedAngle);
+      if (webPose != null && webPose.hasPose) {
+        _frameCount++;
+        final double calculatedAngle = webPose.neckAngle;
+        final RiskLevel risk = NeckAngleCalculator.classifyRisk(calculatedAngle);
 
-      final result = NeckAngleResult(
-        angle: calculatedAngle,
-        riskLevel: risk,
-        earSide: 'right',
-        earConfidence: 0.95,
-        shoulderConfidence: 0.92,
-      );
+        final result = NeckAngleResult(
+          angle: calculatedAngle,
+          cvaAngle: webPose.cvaAngle,
+          riskLevel: risk,
+          earSide: webPose.side,
+          earConfidence: webPose.earConfidence,
+          shoulderConfidence: webPose.shoulderConfidence,
+          isSideProfile: webPose.isSideProfile,
+          earPoint: webPose.ear,
+          shoulderPoint: webPose.shoulder,
+          hipPoint: webPose.hip,
+          hasHip: webPose.hasHip,
+          torsoAngle: webPose.torsoAngle,
+          spinePlumbAngle: webPose.spinePlumbAngle,
+          rawDeltaX: webPose.dx,
+          rawDeltaY: webPose.dy,
+        );
 
-      setState(() {
-        _currentResult = result;
-      });
+        setState(() {
+          _currentResult = result;
+        });
 
-      // ── Bad Posture 5-Second Tracking ──
-      if (result.riskLevel == RiskLevel.critical) {
-        _badPostureStartTime ??= DateTime.now();
+        // ── Bad Posture 5-Second Tracking ──
+        if (result.riskLevel == RiskLevel.critical) {
+          _badPostureStartTime ??= DateTime.now();
 
-        if (!_isAlertShowing &&
-            DateTime.now().difference(_badPostureStartTime!).inSeconds >= 5) {
-          _showRemedyAlert();
+          if (!_isAlertShowing &&
+              DateTime.now().difference(_badPostureStartTime!).inSeconds >= 5) {
+            _showRemedyAlert();
+          }
+        } else {
+          _badPostureStartTime = null;
         }
       } else {
-        _badPostureStartTime = null;
+        // While MediaPipe is acquiring first frame, provide fallback preview
+        _webTick++;
+        if (_currentResult == null && _webTick > 25) {
+          const double calculatedAngle = 12.0;
+          final RiskLevel risk = NeckAngleCalculator.classifyRisk(calculatedAngle);
+          final result = NeckAngleResult(
+            angle: calculatedAngle,
+            cvaAngle: 78.0,
+            riskLevel: risk,
+            earSide: 'right',
+            earConfidence: 0.5,
+            shoulderConfidence: 0.5,
+            isSideProfile: false, // Prompt user to stand sideways
+          );
+          setState(() {
+            _currentResult = result;
+          });
+        }
       }
     });
   }
@@ -506,8 +532,15 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
                 child: CustomPaint(
                   painter: CvaAnglePainter(
                     angle: _currentResult!.angle,
+                    cvaAngle: _currentResult!.cvaAngle,
                     riskLevel: _currentResult!.riskLevel,
                     isSideProfile: _currentResult!.isSideProfile,
+                    earPoint: _currentResult!.earPoint,
+                    shoulderPoint: _currentResult!.shoulderPoint,
+                    hipPoint: _currentResult!.hipPoint,
+                    hasHip: _currentResult!.hasHip,
+                    torsoAngle: _currentResult!.torsoAngle,
+                    spinePlumbAngle: _currentResult!.spinePlumbAngle,
                   ),
                 ),
               ),
@@ -519,18 +552,19 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
               top: 56,
               left: 16,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F1118).withValues(alpha: 0.82),
-                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFF0F1118).withValues(alpha: 0.90),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: _currentResult!.riskLevel.color.withValues(alpha: 0.6),
-                    width: 1,
+                    color: _currentResult!.riskLevel.color.withValues(alpha: 0.75),
+                    width: 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      blurRadius: 8,
+                      color: Colors.black.withValues(alpha: 0.55),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
@@ -541,12 +575,12 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.straighten_rounded, size: 14, color: _currentResult!.riskLevel.color),
+                        Icon(Icons.straighten_rounded, size: 15, color: _currentResult!.riskLevel.color),
                         const SizedBox(width: 6),
                         Text(
-                          "CVA = arctan(Δy / Δx) = ${_currentResult!.angle.toStringAsFixed(1)}°",
+                          "Forward Tilt: θ = arctan(Δx/Δy) = ${_currentResult!.angle.toStringAsFixed(1)}°",
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w800,
                             fontFamily: 'monospace',
                             color: _currentResult!.riskLevel.color,
@@ -555,10 +589,57 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    const Text(
-                      "Angle from Horizontal → Tragus to Shoulder",
-                      style: TextStyle(fontSize: 9, color: Colors.white70),
+                    Text(
+                      _currentResult!.isSideProfile
+                          ? "Clinical CVA: ${_currentResult!.cvaAngle.toStringAsFixed(1)}°  •  Vertical Plumb: 0°"
+                          : "⚠️ Turn 90° sideways for accurate posture measurement",
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        color: _currentResult!.isSideProfile ? Colors.white70 : const Color(0xFFFFB703),
+                        fontWeight: _currentResult!.isSideProfile ? FontWeight.normal : FontWeight.bold,
+                      ),
                     ),
+                    if (_currentResult!.hasHip && _currentResult!.torsoAngle != null) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.only(top: 4),
+                        decoration: const BoxDecoration(
+                          border: Border(top: BorderSide(color: Colors.white24, width: 0.5)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.accessibility_new_rounded, size: 14, color: Color(0xFFA78BFA)),
+                                const SizedBox(width: 5),
+                                Text(
+                                  "Torso Tilt: ${_currentResult!.torsoAngle!.toStringAsFixed(1)}° from vertical",
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    fontFamily: 'monospace',
+                                    color: Color(0xFFA78BFA),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_currentResult!.spinePlumbAngle != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                "Spine Plumb: ${_currentResult!.spinePlumbAngle!.toStringAsFixed(1)}° (Ear-Shoulder-Hip)",
+                                style: const TextStyle(
+                                  fontSize: 9.5,
+                                  color: Color(0xFFC4B5FD),
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -607,8 +688,10 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
                     const SizedBox(width: 6),
                     Text(
                       (_currentResult?.isSideProfile ?? true)
-                          ? 'Side Profile Aligned'
-                          : 'Turn Sideways',
+                          ? ((_currentResult?.hasHip ?? false)
+                              ? 'Full Body Profile'
+                              : 'Side Profile Aligned')
+                          : 'Turn Sideways (90°)',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,

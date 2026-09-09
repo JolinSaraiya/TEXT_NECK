@@ -97,19 +97,18 @@ enum RiskLevel {
 /// Produced by [NeckAngleCalculator.calculateNeckAngle] and consumed by
 /// [PostureResultOverlay] for rendering.
 class NeckAngleResult {
-  /// The calculated cervical inclination angle in degrees.
-  ///
-  /// Range: 0° (perfectly upright) to 90° (fully forward).
-  /// Typical phone usage: 15°–45°.
+  /// The calculated forward neck tilt angle from vertical plumb line in degrees.
+  /// Range: 0° (perfectly upright) to 45°+ (severe forward text neck).
   final double angle;
+
+  /// The clinical Craniovertebral Angle (CVA) in degrees from horizontal baseline.
+  /// Range: 90° (perfectly upright) down to < 45° (severe forward slouch).
+  final double cvaAngle;
 
   /// The risk classification derived from [angle].
   final RiskLevel riskLevel;
 
   /// Which side of the body was used for the calculation.
-  ///
-  /// Either `'left'` or `'right'`. We prefer the left side but fall back
-  /// to right if the left ear/shoulder pair isn't confidently detected.
   final String earSide;
 
   /// Confidence score of the ear landmark used (0.0 – 1.0).
@@ -121,20 +120,47 @@ class NeckAngleResult {
   /// Whether the user is correctly oriented in side-profile (true) or facing front (false).
   final bool isSideProfile;
 
+  /// Normalized landmark coordinates (0.0 to 1.0)
+  final Offset? earPoint;
+  final Offset? shoulderPoint;
+  final Offset? hipPoint;
+  final bool hasHip;
+
+  /// Trunk / Torso vertical inclination angle (degrees from vertical plumb line)
+  final double? torsoAngle;
+
+  /// Full posture alignment angle (Ear-Shoulder-Hip angle in degrees)
+  final double? spinePlumbAngle;
+
+  /// Real-time coordinate deltas
+  final double rawDeltaX;
+  final double rawDeltaY;
+
   const NeckAngleResult({
     required this.angle,
+    double? cvaAngle,
     required this.riskLevel,
     required this.earSide,
     required this.earConfidence,
     required this.shoulderConfidence,
     this.isSideProfile = true,
-  });
+    this.earPoint,
+    this.shoulderPoint,
+    this.hipPoint,
+    this.hasHip = false,
+    this.torsoAngle,
+    this.spinePlumbAngle,
+    this.rawDeltaX = 0.0,
+    this.rawDeltaY = 0.0,
+  }) : cvaAngle = cvaAngle ?? (90.0 - angle);
 
   @override
   String toString() =>
-      'NeckAngleResult(${angle.toStringAsFixed(1)}°, '
+      'NeckAngleResult(tilt: ${angle.toStringAsFixed(1)}°, '
+      'CVA: ${cvaAngle.toStringAsFixed(1)}°, '
       '${riskLevel.shortLabel}, $earSide side, '
       'sideProfile: $isSideProfile, '
+      'hasHip: $hasHip, '
       'ear: ${(earConfidence * 100).toStringAsFixed(0)}%, '
       'shoulder: ${(shoulderConfidence * 100).toStringAsFixed(0)}%)';
 }
@@ -215,17 +241,38 @@ class NeckAngleCalculator {
   ///   },
   /// )
   /// ```
-  /// Validates whether the detected pose represents a true side-profile.
-  /// When facing forward, both shoulders are separated horizontally.
-  /// In side profile, shoulders overlap horizontally (< 120 pixels or normalized equivalent).
+  /// Validates whether the detected pose represents a true side-profile (sagittal view).
+  /// When facing forward, both shoulders are separated horizontally and nose is centered.
+  /// In 90° lateral profile, shoulders overlap horizontally (< 0.13 normalized) or one ear is occluded.
   static bool isSideProfile(Pose pose) {
     final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
     final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-    if (leftShoulder == null || rightShoulder == null) return true; // Single shoulder visible = true side profile
+    final nose = pose.landmarks[PoseLandmarkType.nose];
+    final leftEar = pose.landmarks[PoseLandmarkType.leftEar];
+    final rightEar = pose.landmarks[PoseLandmarkType.rightEar];
+
+    if (leftShoulder == null || rightShoulder == null) return true;
     final double deltaX = (leftShoulder.x - rightShoulder.x).abs();
     final bool isNormalized = leftShoulder.x <= 1.0 && rightShoulder.x <= 1.0;
-    final double threshold = isNormalized ? 0.22 : 120.0;
-    return deltaX < threshold;
+    final double threshold = isNormalized ? 0.13 : 90.0;
+
+    final double leftVis = leftEar?.likelihood ?? 0.0;
+    final double rightVis = rightEar?.likelihood ?? 0.0;
+    final bool bothEarsVisible = leftVis > 0.45 && rightVis > 0.45;
+
+    bool noseBetweenShoulders = false;
+    if (nose != null) {
+      final double minSx = min(leftShoulder.x, rightShoulder.x);
+      final double maxSx = max(leftShoulder.x, rightShoulder.x);
+      if (nose.x >= minSx && nose.x <= maxSx) {
+        noseBetweenShoulders = true;
+      }
+    }
+
+    if (deltaX > threshold && (bothEarsVisible || noseBetweenShoulders)) {
+      return false; // User is facing camera / front view
+    }
+    return deltaX < (isNormalized ? 0.17 : 120.0);
   }
 
   static NeckAngleResult? calculateNeckAngle(Pose pose) {
@@ -234,50 +281,114 @@ class NeckAngleCalculator {
     // ── Try Left Side First ──
     final leftEar = pose.landmarks[PoseLandmarkType.leftEar];
     final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
 
     if (leftEar != null &&
         leftShoulder != null &&
         leftEar.likelihood > _confidenceThreshold &&
         leftShoulder.likelihood > _confidenceThreshold) {
-      final angle = _computeAngle(
+      final forwardTilt = _computeAngle(
         earX: leftEar.x,
         earY: leftEar.y,
         shoulderX: leftShoulder.x,
         shoulderY: leftShoulder.y,
       );
 
+      final hasHip = leftHip != null && leftHip.likelihood > _confidenceThreshold;
+      double? torsoAngle;
+      double? spinePlumbAngle;
+
+      if (hasHip) {
+        final double tDx = (leftShoulder.x - leftHip.x).abs();
+        final double tDy = (leftHip.y - leftShoulder.y).abs();
+        torsoAngle = tDy == 0 ? 0.0 : atan(tDx / tDy) * (180.0 / pi);
+
+        final double v1x = leftEar.x - leftShoulder.x;
+        final double v1y = leftEar.y - leftShoulder.y;
+        final double v2x = leftHip.x - leftShoulder.x;
+        final double v2y = leftHip.y - leftShoulder.y;
+        final double dot = v1x * v2x + v1y * v2y;
+        final double mag1 = sqrt(v1x * v1x + v1y * v1y);
+        final double mag2 = sqrt(v2x * v2x + v2y * v2y);
+        if (mag1 > 0 && mag2 > 0) {
+          final double cosVal = (dot / (mag1 * mag2)).clamp(-1.0, 1.0);
+          spinePlumbAngle = acos(cosVal) * (180.0 / pi);
+        }
+      }
+
       return NeckAngleResult(
-        angle: angle,
-        riskLevel: _classifyRisk(angle),
+        angle: forwardTilt,
+        cvaAngle: (90.0 - forwardTilt).clamp(0.0, 90.0),
+        riskLevel: _classifyRisk(forwardTilt),
         earSide: 'left',
         earConfidence: leftEar.likelihood,
         shoulderConfidence: leftShoulder.likelihood,
         isSideProfile: sideProfile,
+        earPoint: Offset(leftEar.x, leftEar.y),
+        shoulderPoint: Offset(leftShoulder.x, leftShoulder.y),
+        hipPoint: hasHip ? Offset(leftHip.x, leftHip.y) : null,
+        hasHip: hasHip,
+        torsoAngle: torsoAngle,
+        spinePlumbAngle: spinePlumbAngle,
+        rawDeltaX: (leftEar.x - leftShoulder.x).abs(),
+        rawDeltaY: (leftShoulder.y - leftEar.y).abs(),
       );
     }
 
     // ── Fall Back to Right Side ──
     final rightEar = pose.landmarks[PoseLandmarkType.rightEar];
     final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
 
     if (rightEar != null &&
         rightShoulder != null &&
         rightEar.likelihood > _confidenceThreshold &&
         rightShoulder.likelihood > _confidenceThreshold) {
-      final angle = _computeAngle(
+      final forwardTilt = _computeAngle(
         earX: rightEar.x,
         earY: rightEar.y,
         shoulderX: rightShoulder.x,
         shoulderY: rightShoulder.y,
       );
 
+      final hasHip = rightHip != null && rightHip.likelihood > _confidenceThreshold;
+      double? torsoAngle;
+      double? spinePlumbAngle;
+
+      if (hasHip) {
+        final double tDx = (rightShoulder.x - rightHip.x).abs();
+        final double tDy = (rightHip.y - rightShoulder.y).abs();
+        torsoAngle = tDy == 0 ? 0.0 : atan(tDx / tDy) * (180.0 / pi);
+
+        final double v1x = rightEar.x - rightShoulder.x;
+        final double v1y = rightEar.y - rightShoulder.y;
+        final double v2x = rightHip.x - rightShoulder.x;
+        final double v2y = rightHip.y - rightShoulder.y;
+        final double dot = v1x * v2x + v1y * v2y;
+        final double mag1 = sqrt(v1x * v1x + v1y * v1y);
+        final double mag2 = sqrt(v2x * v2x + v2y * v2y);
+        if (mag1 > 0 && mag2 > 0) {
+          final double cosVal = (dot / (mag1 * mag2)).clamp(-1.0, 1.0);
+          spinePlumbAngle = acos(cosVal) * (180.0 / pi);
+        }
+      }
+
       return NeckAngleResult(
-        angle: angle,
-        riskLevel: _classifyRisk(angle),
+        angle: forwardTilt,
+        cvaAngle: (90.0 - forwardTilt).clamp(0.0, 90.0),
+        riskLevel: _classifyRisk(forwardTilt),
         earSide: 'right',
         earConfidence: rightEar.likelihood,
         shoulderConfidence: rightShoulder.likelihood,
         isSideProfile: sideProfile,
+        earPoint: Offset(rightEar.x, rightEar.y),
+        shoulderPoint: Offset(rightShoulder.x, rightShoulder.y),
+        hipPoint: hasHip ? Offset(rightHip.x, rightHip.y) : null,
+        hasHip: hasHip,
+        torsoAngle: torsoAngle,
+        spinePlumbAngle: spinePlumbAngle,
+        rawDeltaX: (rightEar.x - rightShoulder.x).abs(),
+        rawDeltaY: (rightShoulder.y - rightEar.y).abs(),
       );
     }
 
@@ -289,63 +400,43 @@ class NeckAngleCalculator {
   // Core Trigonometric Computation
   // ─────────────────────────────────────────────────────────────────────
 
-  /// Computes the Craniovertebral Angle (CVA) θ using:
+  /// Computes the Forward Neck Tilt Angle θ from the vertical gravity plumb line:
   ///
   /// ```
-  /// dx = |x_ear − x_shoulder|     ← horizontal displacement
-  /// dy = |y_shoulder − y_ear|     ← vertical displacement
-  /// θ  = arctan(dy / dx) × (180 / π)
+  /// dx = |x_ear − x_shoulder|     ← horizontal displacement forward
+  /// dy = |y_shoulder − y_ear|     ← vertical distance
+  /// θ  = arctan(dx / dy) × (180 / π)
   /// ```
   ///
-  /// ### Why this formula works:
-  ///
-  /// We measure the angle FROM the horizontal axis to align with the
-  /// clinical standard for Craniovertebral Angle (CVA). 
-  /// 
-  /// When posture is good, the ear is directly above the shoulder, 
-  /// making `dy` large and `dx` small → `arctan(dy/dx)` yields a large angle (e.g. > 48°).
-  ///
-  /// As the head tilts forward, `dx` grows and `dy` shrinks → the angle decreases (e.g. < 43°).
-  ///
-  /// ### Edge case:
-  /// If `dx == 0` (ear perfectly vertically aligned with shoulder), the head
-  /// is perfectly upright — return 90° (maximum angle).
+  /// When posture is ideal, the ear is directly above the shoulder (dx ≈ 0) → θ ≈ 0°.
+  /// As text neck worsens, ear juts forward (dx increases) → θ increases (15°, 30°, 45°+).
   static double _computeAngle({
     required double earX,
     required double earY,
     required double shoulderX,
     required double shoulderY,
   }) {
-    // Absolute horizontal distance between ear and shoulder
     final double dx = (earX - shoulderX).abs();
-
-    // Absolute vertical distance (shoulder.y > ear.y when upright,
-    // because Y grows downward in screen coordinates)
     final double dy = (shoulderY - earY).abs();
 
-    // Guard: if ear is perfectly vertically aligned, return 90 degrees
-    if (dx == 0) return 90.0;
+    if (dy == 0) return 90.0;
+    if (dx == 0) return 0.0;
 
-    // Core trigonometric calculation
-    final double angleRadians = atan(dy / dx);
-    final double angleDegrees = angleRadians * (180.0 / pi);
-
-    return angleDegrees;
+    final double angleRadians = atan(dx / dy);
+    return angleRadians * (180.0 / pi);
   }
 
   // ─────────────────────────────────────────────────────────────────────
   // Risk Classification
   // ─────────────────────────────────────────────────────────────────────
 
-  /// Classifies a calculated CVA angle into one of three risk tiers.
-  ///
-  /// Thresholds (Clinical CVA standard):
-  /// - **Good**:     θ > 48°
-  /// - **Warning**: 43° ≤ θ ≤ 48°
-  /// - **Critical**: θ < 43°
+  /// Classifies a forward tilt angle into ergonomic risk tiers:
+  /// - **Good**:     θ < 15° (Upright, minimal forward load)
+  /// - **Warning**: 15° ≤ θ < 30° (Mild to moderate text neck)
+  /// - **Critical**: θ ≥ 30° (Excessive cervical stress, correct posture)
   static RiskLevel classifyRisk(double angle) {
-    if (angle > 48.0) return RiskLevel.good;
-    if (angle >= 43.0) return RiskLevel.warning;
+    if (angle < 15.0) return RiskLevel.good;
+    if (angle < 30.0) return RiskLevel.warning;
     return RiskLevel.critical;
   }
 

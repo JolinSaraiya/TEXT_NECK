@@ -29,18 +29,192 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>flutter_app</title>
+  <title>AI Text Neck Posture Scanner</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- MediaPipe Pose for Web Real-Time Computer Vision -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <script>
+    window._poseTracker = null;
+    window._latestPoseData = null;
+    window._isPoseDetecting = false;
+
+    function initMediaPipePose() {
+      if (window._poseTracker || typeof Pose === 'undefined') return;
+      try {
+        const pose = new Pose({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+
+        pose.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          enableSegmentation: false,
+          minDetectionConfidence: 0.45,
+          minTrackingConfidence: 0.45
+        });
+
+        pose.onResults((results) => {
+          if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+            window._latestPoseData = { hasPose: false, timestamp: Date.now() };
+            return;
+          }
+
+          const lms = results.poseLandmarks;
+          // Landmark indices:
+          // 0: Nose, 7: Left Ear, 8: Right Ear, 11: Left Shoulder, 12: Right Shoulder, 23: Left Hip, 24: Right Hip
+          const nose = lms[0];
+          const leftEar = lms[7];
+          const rightEar = lms[8];
+          const leftShoulder = lms[11];
+          const rightShoulder = lms[12];
+          const leftHip = lms[23];
+          const rightHip = lms[24];
+
+          // 1. Precise Side-Profile Validation (Sagittal Plane Detection):
+          // In frontal view, shoulders have wide horizontal separation (> 0.16) and
+          // the nose is positioned directly between the left and right shoulders.
+          // In 90° lateral profile, shoulders overlap horizontally (< 0.13) or one ear is hidden.
+          const shoulderDistance = Math.abs(leftShoulder.x - rightShoulder.x);
+          const bothEarsVisible = (leftEar && (leftEar.visibility || 0) > 0.4) && (rightEar && (rightEar.visibility || 0) > 0.4);
+          
+          let noseBetweenShoulders = false;
+          if (nose) {
+            const minSx = Math.min(leftShoulder.x, rightShoulder.x);
+            const maxSx = Math.max(leftShoulder.x, rightShoulder.x);
+            if (nose.x >= minSx - 0.02 && nose.x <= maxSx + 0.02) {
+              noseBetweenShoulders = true;
+            }
+          }
+
+          // True side profile condition:
+          // If shoulders are apart (> 0.14) and nose is between them or both ears visible -> FRONT VIEW!
+          const isSide = (shoulderDistance < 0.13) || (!bothEarsVisible && !noseBetweenShoulders && shoulderDistance < 0.18);
+
+          // 2. Select more visible side
+          const leftVis = (leftEar?.visibility || 0) + (leftShoulder?.visibility || 0);
+          const rightVis = (rightEar?.visibility || 0) + (rightShoulder?.visibility || 0);
+          const useLeft = leftVis >= rightVis;
+
+          const ear = useLeft ? leftEar : rightEar;
+          const shoulder = useLeft ? leftShoulder : rightShoulder;
+          const hip = useLeft ? leftHip : rightHip;
+          const sideName = useLeft ? 'left' : 'right';
+
+          // 3. Aspect-Ratio Scaled Euclidean Coordinate Math:
+          // Normalized coordinates must be scaled by actual video pixel dimensions
+          // to prevent aspect ratio distortion (e.g. 16:9 or 4:3 cameras).
+          const video = findActiveVideo();
+          const vWidth = (video && video.videoWidth) ? video.videoWidth : 640;
+          const vHeight = (video && video.videoHeight) ? video.videoHeight : 480;
+
+          const dxPx = Math.abs(ear.x - shoulder.x) * vWidth;
+          const dyPx = Math.abs(shoulder.y - ear.y) * vHeight;
+
+          // Forward Tilt from Vertical Plumb Line (0° = perfectly upright ear over shoulder)
+          // Range: 0° (optimal) to 45°+ (severe text neck)
+          const forwardTilt = dyPx === 0 ? 90.0 : Math.round((Math.atan(dxPx / dyPx) * (180.0 / Math.PI)) * 10) / 10;
+          // Clinical CVA from Horizontal Baseline (90° = upright, < 48° = forward posture)
+          const cvaAngle = Math.round((90.0 - forwardTilt) * 10) / 10;
+
+          // 4. Hip / Standing Sideways Plumb Line (Full Body Posture):
+          const hasHip = hip && (hip.visibility || 0) > 0.3 && hip.y > shoulder.y;
+          let torsoAngle = null;
+          let spinePlumbAngle = null;
+
+          if (hasHip) {
+            const torsoDx = Math.abs(shoulder.x - hip.x) * vWidth;
+            const torsoDy = Math.abs(hip.y - shoulder.y) * vHeight;
+            torsoAngle = torsoDy === 0 ? 0.0 : Math.round((Math.atan(torsoDx / torsoDy) * (180.0 / Math.PI)) * 10) / 10;
+
+            // Ear-Shoulder-Hip alignment (Spine Plumb Angle)
+            const v1x = (ear.x - shoulder.x) * vWidth;
+            const v1y = (ear.y - shoulder.y) * vHeight;
+            const v2x = (hip.x - shoulder.x) * vWidth;
+            const v2y = (hip.y - shoulder.y) * vHeight;
+            const dot = v1x * v2x + v1y * v2y;
+            const mag1 = Math.hypot(v1x, v1y);
+            const mag2 = Math.hypot(v2x, v2y);
+            if (mag1 > 0 && mag2 > 0) {
+              const cosVal = Math.max(-1.0, Math.min(1.0, dot / (mag1 * mag2)));
+              spinePlumbAngle = Math.round((Math.acos(cosVal) * (180.0 / Math.PI)) * 10) / 10;
+            }
+          }
+
+          // Store for Flutter bridge consumption
+          window._latestPoseData = {
+            hasPose: true,
+            isSideProfile: isSide,
+            shoulderDistance: shoulderDistance,
+            side: sideName,
+            earX: ear.x,
+            earY: ear.y,
+            earVis: ear.visibility || 0.9,
+            shoulderX: shoulder.x,
+            shoulderY: shoulder.y,
+            shoulderVis: shoulder.visibility || 0.9,
+            hasHip: hasHip,
+            hipX: hasHip ? hip.x : null,
+            hipY: hasHip ? hip.y : null,
+            hipVis: hasHip ? (hip.visibility || 0.8) : 0,
+            neckAngle: forwardTilt,
+            cvaAngle: cvaAngle,
+            torsoAngle: torsoAngle,
+            spinePlumbAngle: spinePlumbAngle,
+            dx: dxPx,
+            dy: dyPx,
+            timestamp: Date.now()
+          };
+        });
+
+        window._poseTracker = pose;
+        console.log("[MediaPipe] Pose Tracker successfully ready");
+
+        // Continuously capture video frames from the webcam
+        function findActiveVideo() {
+          const videos = document.getElementsByTagName('video');
+          for (let i = 0; i < videos.length; i++) {
+            const v = videos[i];
+            if (v && v.readyState >= 2 && !v.paused) return v;
+          }
+          return null;
+        }
+
+        let lastProcessTime = 0;
+        async function runDetectionLoop() {
+          const now = Date.now();
+          if (now - lastProcessTime > 65) { // ~15 FPS
+            const video = findActiveVideo();
+            if (video && window._poseTracker) {
+              try {
+                lastProcessTime = now;
+                await window._poseTracker.send({ image: video });
+              } catch (e) {
+                // Ignore transient frame skips
+              }
+            }
+          }
+          requestAnimationFrame(runDetectionLoop);
+        }
+        requestAnimationFrame(runDetectionLoop);
+
+      } catch (err) {
+        console.error("[MediaPipe] Init error:", err);
+      }
+    }
+
+    // Initialize when page loads
+    window.addEventListener('load', () => {
+      setTimeout(initMediaPipePose, 1200);
+    });
+    // Fallback init on DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(initMediaPipePose, 1200);
+    });
+  </script>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
