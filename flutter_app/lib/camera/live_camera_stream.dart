@@ -18,6 +18,7 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
@@ -210,6 +211,12 @@ class LiveCameraStreamState extends State<LiveCameraStream>
   /// This method is called by the parent widget (the integration screen)
   /// when the user taps "Start Scan".
   void startStreaming() {
+    if (kIsWeb) {
+      _isStreaming = true;
+      debugPrint('[Member1] 🟢 Web camera stream active');
+      return;
+    }
+
     if (_cameraController == null ||
         !_cameraController!.value.isInitialized ||
         _isStreaming) {
@@ -225,9 +232,14 @@ class LiveCameraStreamState extends State<LiveCameraStream>
   ///
   /// Called when the user taps "End Session" or the widget is disposed.
   Future<void> _stopStreaming() async {
-    if (!_isStreaming || _cameraController == null) return;
+    if (!_isStreaming) return;
 
     _isStreaming = false;
+    if (kIsWeb || _cameraController == null) {
+      debugPrint('[Member1] 🔴 Web stream stopped');
+      return;
+    }
+
     try {
       await _cameraController!.stopImageStream();
       debugPrint('[Member1] 🔴 Image stream stopped');

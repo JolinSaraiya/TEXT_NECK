@@ -267,30 +267,27 @@ class NeckAngleCalculator {
   // Core Trigonometric Computation
   // ─────────────────────────────────────────────────────────────────────
 
-  /// Computes the forward cervical inclination angle θ using:
+  /// Computes the Craniovertebral Angle (CVA) θ using:
   ///
   /// ```
   /// dx = |x_ear − x_shoulder|     ← horizontal displacement
   /// dy = |y_shoulder − y_ear|     ← vertical displacement
-  /// θ  = arctan(dx / dy) × (180 / π)
+  /// θ  = arctan(dy / dx) × (180 / π)
   /// ```
   ///
   /// ### Why this formula works:
   ///
-  /// In screen coordinates, Y increases downward. When posture is good,
-  /// the ear is above the shoulder (lower Y value), so `dy` is large
-  /// and `dx` is small → `arctan` yields a small angle.
+  /// We measure the angle FROM the horizontal axis to align with the
+  /// clinical standard for Craniovertebral Angle (CVA). 
+  /// 
+  /// When posture is good, the ear is directly above the shoulder, 
+  /// making `dy` large and `dx` small → `arctan(dy/dx)` yields a large angle (e.g. > 48°).
   ///
-  /// As the head tilts forward, `dx` grows → the angle increases.
+  /// As the head tilts forward, `dx` grows and `dy` shrinks → the angle decreases (e.g. < 43°).
   ///
   /// ### Edge case:
-  /// If `dy == 0` (ear at the same vertical level as shoulder), the head
-  /// is fully forward → we return 90° (maximum angle).
-  ///
-  /// ### Why arctan(dx/dy) instead of arctan(dy/dx):
-  /// We measure the angle FROM the vertical axis. `arctan(dx/dy)` gives
-  /// the deviation from vertical, which is what clinicians measure for
-  /// Forward Head Posture.
+  /// If `dx == 0` (ear perfectly vertically aligned with shoulder), the head
+  /// is perfectly upright — return 90° (maximum angle).
   static double _computeAngle({
     required double earX,
     required double earY,
@@ -304,12 +301,11 @@ class NeckAngleCalculator {
     // because Y grows downward in screen coordinates)
     final double dy = (shoulderY - earY).abs();
 
-    // Guard: if ear is at the exact same vertical level as shoulder,
-    // the head is fully forward — return maximum angle.
-    if (dy == 0) return 90.0;
+    // Guard: if ear is perfectly vertically aligned, return 90 degrees
+    if (dx == 0) return 90.0;
 
     // Core trigonometric calculation
-    final double angleRadians = atan(dx / dy);
+    final double angleRadians = atan(dy / dx);
     final double angleDegrees = angleRadians * (180.0 / pi);
 
     return angleDegrees;
@@ -319,19 +315,17 @@ class NeckAngleCalculator {
   // Risk Classification
   // ─────────────────────────────────────────────────────────────────────
 
-  /// Classifies a calculated angle into one of three risk tiers.
+  /// Classifies a calculated CVA angle into one of three risk tiers.
   ///
-  /// Thresholds:
-  /// - **Good**:     0° ≤ θ < 15°
-  /// - **Warning**: 15° ≤ θ < 30°
-  /// - **Critical**: θ ≥ 30°
-  ///
-  /// These thresholds are based on clinical literature for Forward Head
-  /// Posture assessment (Hansraj, 2014 — "Assessment of Stresses in the
-  /// Cervical Spine Caused by Posture and Position of the Head").
-  static RiskLevel _classifyRisk(double angle) {
-    if (angle < 15.0) return RiskLevel.good;
-    if (angle < 30.0) return RiskLevel.warning;
+  /// Thresholds (Clinical CVA standard):
+  /// - **Good**:     θ > 48°
+  /// - **Warning**: 43° ≤ θ ≤ 48°
+  /// - **Critical**: θ < 43°
+  static RiskLevel classifyRisk(double angle) {
+    if (angle > 48.0) return RiskLevel.good;
+    if (angle >= 43.0) return RiskLevel.warning;
     return RiskLevel.critical;
   }
+
+  static RiskLevel _classifyRisk(double angle) => classifyRisk(angle);
 }

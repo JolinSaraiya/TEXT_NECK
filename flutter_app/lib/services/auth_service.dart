@@ -10,13 +10,17 @@ class AuthService {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   // Email & Password Sign Up
-  Future<User?> signUpWithEmailAndPassword(String email, String password) async {
+  Future<User?> signUpWithEmailAndPassword(String email, String password, {String? name}) async {
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-      return result.user;
+      if (name != null && result.user != null) {
+        await result.user!.updateDisplayName(name);
+        await result.user!.reload();
+      }
+      return _auth.currentUser;
     } catch (e) {
       print(e.toString());
       return null;
@@ -66,6 +70,16 @@ class AuthService {
     } catch (e) {
       print(e.toString());
       return null;
+    }
+  }
+
+  // Password Reset
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email.trim());
+    } catch (e) {
+      print(e.toString());
+      rethrow;
     }
   }
 
