@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/exercise_detail_sheet.dart';
 import 'posture_scan_screen.dart'; // From team member's code!
+import 'photo_analysis_screen.dart';
 import '../services/posture_history_manager.dart';
 
 class DashboardView extends StatelessWidget {
@@ -223,9 +224,7 @@ class DashboardView extends StatelessWidget {
                       ],
                     ),
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const PostureScanScreen()));
-                      },
+                      onPressed: () => _showScanModeSelection(context),
                       icon: const Icon(Icons.document_scanner, size: 24),
                       label: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -493,6 +492,234 @@ class DashboardView extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showScanModeSelection(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          decoration: BoxDecoration(
+            color: AppColors.surf(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(
+              color: AppColors.border(context),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Drag Handle
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Title Header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryAccent.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.center_focus_strong_rounded,
+                      color: AppColors.primaryAccent,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Choose Scan Method',
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text(context),
+                          ),
+                        ),
+                        Text(
+                          'Select how you would like to analyze your cervical posture',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppColors.subtext(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // Option 1: Live Camera Scan
+              _buildScanOptionCard(
+                context: context,
+                isDark: isDark,
+                icon: Icons.videocam_rounded,
+                iconBgColor: AppColors.primaryAccent.withValues(alpha: 0.15),
+                iconColor: AppColors.primaryAccent,
+                badgeText: 'AI LIVE • 3s AUTO-LOCK',
+                badgeBgColor: AppColors.primaryAccent.withValues(alpha: 0.2),
+                badgeTextColor: AppColors.primaryAccent,
+                title: 'Live Camera Scan',
+                description: 'Real-time camera feed with live biomechanical angle vector overlays. Posture is automatically measured and locked after 3 seconds of steady positioning.',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PostureScanScreen()),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 14),
+
+              // Option 2: Upload Photo
+              _buildScanOptionCard(
+                context: context,
+                isDark: isDark,
+                icon: Icons.add_photo_alternate_rounded,
+                iconBgColor: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                iconColor: const Color(0xFF38BDF8),
+                badgeText: 'GALLERY & FILES',
+                badgeBgColor: const Color(0xFF38BDF8).withValues(alpha: 0.2),
+                badgeTextColor: const Color(0xFF38BDF8),
+                title: 'Upload Photo Analysis',
+                description: 'Upload a lateral side-profile photograph from your gallery. Automatically verifies image validity, isolates key landmarks, and computes posture metrics.',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PhotoAnalysisScreen()),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildScanOptionCard({
+    required BuildContext context,
+    required bool isDark,
+    required IconData icon,
+    required Color iconBgColor,
+    required Color iconColor,
+    required String badgeText,
+    required Color badgeBgColor,
+    required Color badgeTextColor,
+    required String title,
+    required String description,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF192238) : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isDark ? const Color(0xFF283454) : const Color(0xFFE2E8F0),
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: iconColor, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          title,
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text(context),
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: badgeBgColor,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            badgeText,
+                            style: GoogleFonts.inter(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                              color: badgeTextColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      description,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppColors.subtext(context),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: AppColors.subtext(context).withValues(alpha: 0.6),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

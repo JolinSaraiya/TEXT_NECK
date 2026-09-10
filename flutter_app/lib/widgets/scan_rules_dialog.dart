@@ -49,9 +49,13 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final size = MediaQuery.of(context).size;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+      constraints: BoxConstraints(
+        maxHeight: size.height * 0.88,
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF141A2E) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
@@ -69,7 +73,7 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
             child: Container(
               width: 40,
               height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
+              margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 color: isDark ? Colors.white24 : Colors.black12,
                 borderRadius: BorderRadius.circular(2),
@@ -98,7 +102,7 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.isSnapshot ? 'Snapshot Alignment Guide' : 'Scan Positioning Rules',
+                      widget.isSnapshot ? 'Snapshot Alignment Guide' : 'Scan & Photo Guide',
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -106,7 +110,7 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
                       ),
                     ),
                     Text(
-                      'Follow these 3 steps for clinically accurate CVA readings',
+                      'How to position yourself & upload photos for CVA analysis',
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: isDark ? Colors.white70 : const Color(0xFF64748B),
@@ -118,34 +122,215 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
             ],
           ),
 
-          const SizedBox(height: 20),
-
-          // Steps
-          _buildRuleTile(
-            number: '1',
-            icon: Icons.rotate_right_rounded,
-            title: 'Turn 90° Sideways (Profile View)',
-            description: 'Sit or stand perpendicular to the camera so your ear and shoulder are clearly visible in the preview.',
-            isDark: isDark,
-          ),
-          const SizedBox(height: 12),
-          _buildRuleTile(
-            number: '2',
-            icon: Icons.smartphone_rounded,
-            title: 'Adopt Your Natural Posture',
-            description: 'Do not strain or pose. Look at your phone or screen naturally as you would during normal daily usage.',
-            isDark: isDark,
-          ),
-          const SizedBox(height: 12),
-          _buildRuleTile(
-            number: '3',
-            icon: Icons.light_mode_rounded,
-            title: 'Clear Lighting & Framing',
-            description: 'Ensure your side contour is well lit and free of heavy hair or loose clothing obscuring the ear-shoulder line.',
-            isDark: isDark,
-          ),
-
           const SizedBox(height: 16),
+
+          // Scrollable Content
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Visual Comparison Cards: How to Stand & Photo Guidelines
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1B233C) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF2B3658) : const Color(0xFFCBD5E1),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.compare_rounded, size: 16, color: AppColors.primaryAccent),
+                            const SizedBox(width: 6),
+                            Text(
+                              'HOW TO STAND / PHOTO CRITERIA',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.8,
+                                color: isDark ? Colors.white70 : const Color(0xFF475569),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            // Correct Pose Card
+                            Expanded(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF22C55E).withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFF22C55E).withValues(alpha: 0.6),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                                      child: AspectRatio(
+                                        aspectRatio: 1.0,
+                                        child: Image.asset(
+                                          'assets/images/posture_guide_correct.png',
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                      child: Column(
+                                        children: [
+                                          const Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons.check_circle_rounded, color: Color(0xFF22C55E), size: 14),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                'CORRECT',
+                                                style: TextStyle(
+                                                  color: Color(0xFF22C55E),
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '90° sideways profile. Ear & shoulder line visible.',
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 9.5,
+                                              color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                              height: 1.2,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            // Wrong Pose Card
+                            Expanded(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFFEF4444).withValues(alpha: 0.6),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                                      child: AspectRatio(
+                                        aspectRatio: 1.0,
+                                        child: Image.asset(
+                                          'assets/images/posture_guide_wrong.png',
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                      child: Column(
+                                        children: [
+                                          const Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons.cancel_rounded, color: Color(0xFFEF4444), size: 14),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                'WRONG PHOTO',
+                                                style: TextStyle(
+                                                  color: Color(0xFFEF4444),
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Front-facing or diagonal poses will be rejected.',
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 9.5,
+                                              color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                              height: 1.2,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Steps / Rules
+                  _buildRuleTile(
+                    number: '1',
+                    icon: Icons.rotate_right_rounded,
+                    title: 'Stand 90° Sideways to Camera',
+                    description: 'Stand or sit upright perpendicular to the camera so your ear, shoulder, and neck contour are clearly seen.',
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 10),
+                  _buildRuleTile(
+                    number: '2',
+                    icon: Icons.add_photo_alternate_rounded,
+                    title: 'If Uploading a Photo',
+                    description: 'Take a clear sideways photo at eye/shoulder height against good lighting. Avoid selfies, front poses, or heavy coats.',
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 10),
+                  _buildRuleTile(
+                    number: '3',
+                    icon: Icons.warning_amber_rounded,
+                    title: 'Wrong Photo Detection',
+                    description: 'Our AI checks for lateral alignment. If you upload a frontal or obscured picture, it will be flagged as an invalid photo with re-take tips.',
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 10),
+                  _buildRuleTile(
+                    number: '4',
+                    icon: Icons.smartphone_rounded,
+                    title: 'Adopt Your Natural Posture',
+                    description: 'Do not stiffen or artificially stand tall. Hold your phone or gaze naturally as you do during everyday use.',
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
 
           // Don't show again checkbox
           Row(
@@ -174,11 +359,11 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
             ],
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           // Proceed Button
           SizedBox(
-            height: 52,
+            height: 50,
             child: ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
@@ -191,7 +376,7 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
                 elevation: 0,
               ),
               child: Text(
-                widget.isSnapshot ? 'Take Snapshot' : 'I Understand — Start Scan',
+                widget.isSnapshot ? 'Take Snapshot' : 'I Understand — Continue',
                 style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),

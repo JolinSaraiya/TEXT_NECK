@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_colors.dart';
 import 'dashboard_view.dart';
-import 'posture_scan_screen.dart';
 import 'analysis_results_screen.dart';
 import 'exercise_screen.dart';
 import 'profile_screen.dart'; // From team member's code
@@ -27,8 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> screens = [
-      DashboardView(onProfileTap: () => _onItemTapped(4)),
-      const PostureScanScreen(),
+      DashboardView(onProfileTap: () => _onItemTapped(3)),
       const AnalysisResultsScreen(),
       const ExerciseScreen(),
       const ProfileScreen(),
@@ -57,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildFloatingNavBar(BuildContext context, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.surf(context),
         borderRadius: BorderRadius.circular(40),
@@ -76,13 +74,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildNavItem(0, Icons.grid_view_rounded, 'Home', context),
-          _buildNavItem(1, Icons.photo_camera_rounded, 'Camera', context),
-          _buildNavItem(2, Icons.analytics_rounded, 'Results', context),
-          _buildNavItem(3, Icons.fitness_center_rounded, 'Exercise', context),
-          _buildNavItem(4, Icons.person_rounded, 'Profile', context),
+          _buildNavItem(1, Icons.analytics_rounded, 'Results', context),
+          _buildNavItem(2, Icons.fitness_center_rounded, 'Exercise', context),
+          _buildNavItem(3, Icons.person_rounded, 'Profile', context),
         ],
       ),
     );
