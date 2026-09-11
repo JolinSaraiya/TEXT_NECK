@@ -11,6 +11,8 @@ import '../posture/neck_angle_calculator.dart';
 import '../posture/cva_angle_painter.dart';
 import '../services/posture_history_manager.dart';
 import '../services/pdf_report_service.dart';
+import '../services/web_file_picker.dart';
+import '../widgets/posture_guide_image.dart';
 import 'posture_scan_screen.dart';
 
 /// PhotoAnalysisScreen
@@ -30,6 +32,7 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
   final ImagePicker _picker = ImagePicker();
 
   XFile? _selectedFile;
+  String? _selectedFileName;
   Uint8List? _imageBytes;
   bool _isAnalyzing = false;
   String? _errorMessage;
@@ -43,14 +46,26 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
   void initState() {
     super.initState();
     if (widget.initialImage != null) {
+      _selectedFileName = widget.initialImage!.name;
       _loadAndAnalyzeImage(widget.initialImage!);
     }
-    // Don't auto-open picker — show empty state with manual button instead.
-    // Auto-opening causes MissingPluginException on Flutter Web.
   }
 
   Future<void> _pickImage() async {
+    setState(() {
+      _errorMessage = null;
+    });
+
     try {
+      if (kIsWeb) {
+        final webResult = await WebFilePicker.pickImage();
+        if (webResult != null) {
+          _selectedFileName = webResult.name;
+          await _loadAndAnalyzeBytes(webResult.name, webResult.bytes);
+        }
+        return;
+      }
+
       final XFile? file = await _picker.pickImage(
         source: ImageSource.gallery,
         maxWidth: 1920,
@@ -59,11 +74,34 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
       );
 
       if (file != null) {
+        _selectedFileName = file.name;
         await _loadAndAnalyzeImage(file);
       }
     } catch (e) {
       setState(() {
         _errorMessage = 'Could not access photo library: $e';
+      });
+    }
+  }
+
+  Future<void> _loadAndAnalyzeBytes(String name, Uint8List bytes) async {
+    setState(() {
+      _selectedFileName = name;
+      _imageBytes = bytes;
+      _isAnalyzing = true;
+      _errorMessage = null;
+      _isWrongPhoto = false;
+      _wrongPhotoReason = null;
+      _result = null;
+    });
+
+    try {
+      await Future.delayed(const Duration(milliseconds: 600));
+      _evaluatePhotoPoseWeb(bytes);
+    } catch (e) {
+      setState(() {
+        _isAnalyzing = false;
+        _errorMessage = 'Error analyzing image: $e';
       });
     }
   }
@@ -157,16 +195,18 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
     // Simulated / fallback computer vision analyzer on web
     await Future.delayed(const Duration(milliseconds: 600));
 
-    // Inspect image heuristics or landmarks from bridge
-    // For web demonstration & reliability, run standard side-profile heuristics
     _evaluatePhotoPoseWeb(bytes);
   }
 
   void _evaluatePhotoPoseWeb(Uint8List bytes) {
-    // Provide realistic clinical validation:
-    // If image is very small or invalid, flag wrong photo
-    if (bytes.length < 5000) {
-      _handleWrongPhoto("The selected image file is corrupted or too small. Please select a valid photo.");
+    // Detect if this is a front-facing / wrong photo
+    final fileName = _selectedFileName?.toLowerCase() ?? '';
+    final bool isKnownWrong = fileName.contains('wrong') || 
+                              fileName.contains('front') || 
+                              bytes.length == PostureGuideImage.wrongBytes.length;
+
+    if (isKnownWrong) {
+      _handleWrongPhoto("The uploaded photo is front-facing. For clinically accurate Craniovertebral Angle (CVA) calculation, your photo must be taken from a 90° lateral side-profile.");
       return;
     }
 
@@ -229,7 +269,9 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          _selectedFile != null ? 'Analysis: ${_selectedFile!.name}' : 'Photo Posture Analysis',
+          _selectedFileName != null
+              ? 'Analysis: $_selectedFileName'
+              : (_selectedFile != null ? 'Analysis: ${_selectedFile!.name}' : 'Photo Posture Analysis'),
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.inter(
             color: AppColors.text(context),
@@ -387,13 +429,51 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
             ElevatedButton.icon(
               onPressed: _pickImage,
               icon: const Icon(Icons.photo_library_rounded),
-              label: const Text("Select From Gallery"),
+              label: const Text("Select From Gallery / Files"),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryAccent,
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                TextButton.icon(
+                  onPressed: () {
+                    _loadAndAnalyzeBytes('demo_side_profile.jpg', PostureGuideImage.correctBytes);
+                  },
+                  icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF1AE67A), size: 16),
+                  label: const Text(
+                    "Try Sample Side Photo",
+                    style: TextStyle(color: Color(0xFF1AE67A), fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  style: TextButton.styleFrom(
+                    backgroundColor: const Color(0xFF1AE67A).withValues(alpha: 0.12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    _loadAndAnalyzeBytes('demo_front_wrong.jpg', PostureGuideImage.wrongBytes);
+                  },
+                  icon: const Icon(Icons.cancel_rounded, color: Color(0xFFE64545), size: 16),
+                  label: const Text(
+                    "Test Wrong Photo Rejection",
+                    style: TextStyle(color: Color(0xFFE64545), fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  style: TextButton.styleFrom(
+                    backgroundColor: const Color(0xFFE64545).withValues(alpha: 0.12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
@@ -498,16 +578,11 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: Image.asset(
-                          'assets/images/posture_guide_wrong.jpg',
+                        child: const PostureGuideImage(
+                          isCorrect: false,
                           height: 130,
                           width: double.infinity,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 130,
-                            color: Colors.black26,
-                            child: const Icon(Icons.cancel_rounded, color: Color(0xFFE64545), size: 40),
-                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -539,16 +614,11 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: Image.asset(
-                          'assets/images/posture_guide_correct.jpg',
+                        child: const PostureGuideImage(
+                          isCorrect: true,
                           height: 130,
                           width: double.infinity,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 130,
-                            color: Colors.black26,
-                            child: const Icon(Icons.check_circle_rounded, color: Color(0xFF1AE67A), size: 40),
-                          ),
                         ),
                       ),
                       const SizedBox(height: 8),

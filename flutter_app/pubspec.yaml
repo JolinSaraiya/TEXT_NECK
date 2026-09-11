@@ -34,3 +34,5 @@ flutter:
   assets:
     - .env
     - assets/images/
+    - assets/images/posture_guide_correct.jpg
+    - assets/images/posture_guide_wrong.jpg

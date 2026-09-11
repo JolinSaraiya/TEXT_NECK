@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import 'posture_guide_image.dart';
 
 /// Pre-Scan Positioning Guide Modal
 /// Displays clear instructions to the user on how to position themselves in frame
@@ -177,16 +178,16 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    ClipRRect(
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                                      child: AspectRatio(
-                                        aspectRatio: 1.0,
-                                        child: Image.asset(
-                                          'assets/images/posture_guide_correct.jpg',
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                    ),
+                                     ClipRRect(
+                                       borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                                       child: const AspectRatio(
+                                         aspectRatio: 1.0,
+                                         child: PostureGuideImage(
+                                           isCorrect: true,
+                                           fit: BoxFit.cover,
+                                         ),
+                                       ),
+                                     ),
                                     Padding(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                                       child: Column(
@@ -238,16 +239,16 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    ClipRRect(
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                                      child: AspectRatio(
-                                        aspectRatio: 1.0,
-                                        child: Image.asset(
-                                          'assets/images/posture_guide_wrong.jpg',
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                    ),
+                                     ClipRRect(
+                                       borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                                       child: const AspectRatio(
+                                         aspectRatio: 1.0,
+                                         child: PostureGuideImage(
+                                           isCorrect: false,
+                                           fit: BoxFit.cover,
+                                         ),
+                                       ),
+                                     ),
                                     Padding(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                                       child: Column(
