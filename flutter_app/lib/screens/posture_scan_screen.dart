@@ -31,9 +31,9 @@ import '../posture/neck_angle_calculator.dart';
 import '../posture/posture_result_overlay.dart';
 import '../posture/cva_angle_painter.dart';
 import '../services/posture_history_manager.dart';
-import '../services/pdf_report_service.dart';
 import '../services/web_pose_bridge.dart';
 import '../widgets/scan_rules_dialog.dart';
+import 'scan_detail_screen.dart';
 
 /// The main posture scanning screen that integrates:
 /// - [LiveCameraStream] (Member 1): Camera preview + ML Kit pose detection
@@ -342,17 +342,33 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
       '$_frameCount frames processed',
     );
 
-    // ── Show Session Summary ──
+    // ── Navigate to Scan Detail Screen ──
     if (_currentResult != null && mounted) {
+      final result = _currentResult!;
+      final frames = _frameCount;
+      
       // Save session to history manager
       PostureHistoryManager().addSession(
-        angle: _currentResult!.angle,
-        riskLevel: _currentResult!.riskLevel,
-        earSide: _currentResult!.earSide,
-        frameCount: _frameCount,
+        angle: result.angle,
+        riskLevel: result.riskLevel,
+        earSide: result.earSide,
+        frameCount: frames,
       );
       
-      _showSessionSummary();
+      // Navigate to full scan detail screen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ScanDetailScreen(
+            angle: result.angle,
+            riskLevel: result.riskLevel,
+            earSide: result.earSide,
+            frameCount: frames,
+            timestamp: DateTime.now(),
+            showNewScanButton: true,
+          ),
+        ),
+      );
     }
   }
 
@@ -444,104 +460,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
     });
   }
 
-  void _showSessionSummary() {
-    final result = _currentResult!;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1D2E),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(
-            color: Colors.white.withValues(alpha: 0.08),
-          ),
-        ),
-        title: const Text(
-          'Session Complete',
-          style: TextStyle(
-            color: Color(0xFFF0F4FA),
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Angle badge
-            RiskPill(
-              riskLevel: result.riskLevel,
-              angle: result.angle,
-            ),
-            const SizedBox(height: 16),
-
-            // Stats
-            _buildStat('Frames Processed', '$_frameCount'),
-            _buildStat('Last Angle', '${result.angle.toStringAsFixed(1)}°'),
-            _buildStat('Risk Level', result.riskLevel.label),
-            _buildStat('Detection Side', '${result.earSide} ear/shoulder'),
-          ],
-        ),
-        actions: [
-          ElevatedButton.icon(
-            onPressed: () {
-              PdfReportService.instance.exportPostureReport(
-                angle: result.angle,
-                riskLevel: result.riskLevel,
-              );
-            },
-            icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
-            label: const Text('Export Clinical PDF'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1AD4AE),
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Done',
-              style: TextStyle(
-                color: Color(0xFF1AD4AE),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStat(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
-              fontSize: 13,
-              fontFamily: 'Inter',
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Color(0xFFF0F4FA),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Inter',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // UI
@@ -941,25 +860,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
     );
   }
 
-  void _requestSnapshotScan() {
-    ScanRulesDialog.show(
-      context,
-      onProceed: _takeSnapshotScan,
-      isSnapshot: true,
-    );
-  }
 
-  void _takeSnapshotScan() {
-    if (!_isSessionActive) {
-      _startSession();
-    }
-    // Briefly sample/analyze, then automatically freeze and display summary
-    Future.delayed(const Duration(milliseconds: 900), () {
-      if (mounted && _isSessionActive) {
-        _endSession();
-      }
-    });
-  }
 
   Widget _buildStartSessionButton() {
     final bool isQuick = _scanMode == ScanMode.quickScan;
@@ -980,55 +881,26 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: SizedBox(
-                height: 56,
-                child: ElevatedButton.icon(
-                  onPressed: _requestStartSession,
-                  icon: Icon(isQuick ? Icons.timer_rounded : Icons.laptop_chromebook_rounded, size: 24),
-                  label: Text(
-                    isQuick ? 'Start 3s Quick Scan' : 'Start Desk Monitor',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1AD4AE),
-                    foregroundColor: const Color(0xFF0F1118),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 8,
-                    shadowColor: const Color(0xFF1AD4AE).withValues(alpha: 0.4),
-                  ),
-                ),
-              ),
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: ElevatedButton.icon(
+            onPressed: _requestStartSession,
+            icon: Icon(isQuick ? Icons.timer_rounded : Icons.laptop_chromebook_rounded, size: 24),
+            label: Text(
+              isQuick ? 'Start 3s Quick Scan' : 'Start Desk Monitor',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: SizedBox(
-                height: 56,
-                child: OutlinedButton.icon(
-                  onPressed: _requestSnapshotScan,
-                  icon: const Icon(Icons.camera_alt_rounded, size: 20),
-                  label: const Text(
-                    'Snapshot',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF1AD4AE),
-                    side: const BorderSide(color: Color(0xFF1AD4AE), width: 1.5),
-                    backgroundColor: const Color(0xFF1AD4AE).withValues(alpha: 0.08),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1AD4AE),
+              foregroundColor: const Color(0xFF0F1118),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
+              elevation: 8,
+              shadowColor: const Color(0xFF1AD4AE).withValues(alpha: 0.4),
             ),
-          ],
+          ),
         ),
       ],
     );

@@ -44,12 +44,9 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
     super.initState();
     if (widget.initialImage != null) {
       _loadAndAnalyzeImage(widget.initialImage!);
-    } else {
-      // Auto-open picker if no initial image passed
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _pickImage();
-      });
     }
+    // Don't auto-open picker — show empty state with manual button instead.
+    // Auto-opening causes MissingPluginException on Flutter Web.
   }
 
   Future<void> _pickImage() async {
@@ -502,7 +499,7 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
                         child: Image.asset(
-                          'assets/images/posture_guide_wrong.png',
+                          'assets/images/posture_guide_wrong.jpg',
                           height: 130,
                           width: double.infinity,
                           fit: BoxFit.cover,
@@ -543,7 +540,7 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
                         child: Image.asset(
-                          'assets/images/posture_guide_correct.png',
+                          'assets/images/posture_guide_correct.jpg',
                           height: 130,
                           width: double.infinity,
                           fit: BoxFit.cover,

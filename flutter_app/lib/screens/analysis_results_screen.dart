@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../services/posture_history_manager.dart';
 import '../services/pdf_report_service.dart';
 import '../posture/neck_angle_calculator.dart';
+import 'scan_detail_screen.dart';
 
 class AnalysisResultsScreen extends StatelessWidget {
   const AnalysisResultsScreen({super.key});
@@ -474,6 +475,82 @@ class AnalysisResultsScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+
+                  if (manager.history.isNotEmpty) ...[
+                    const SizedBox(height: 32),
+                    Text(
+                      'Session Records',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.text(context),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...manager.history.map((result) {
+                      final scoreText = '${100 - result.riskScore}%';
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ScanDetailScreen.fromSession(result),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: AppColors.surf(context),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.border(context), width: 1),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _formatDateTime(result.timestamp),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.text(context),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${result.riskLevel.shortLabel} • Angle: ${result.angle.toStringAsFixed(1)}° • CVA: ${result.craniovertebralAngle.toStringAsFixed(1)}°',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: result.riskLevel.color,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  Text(
+                                    scoreText,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.text(context),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(Icons.chevron_right, size: 18, color: AppColors.subtext(context)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
 
                   const SizedBox(height: 100), // padding for the bottom nav bar
                 ],

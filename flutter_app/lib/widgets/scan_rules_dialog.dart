@@ -182,7 +182,7 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
                                       child: AspectRatio(
                                         aspectRatio: 1.0,
                                         child: Image.asset(
-                                          'assets/images/posture_guide_correct.png',
+                                          'assets/images/posture_guide_correct.jpg',
                                           fit: BoxFit.cover,
                                         ),
                                       ),
@@ -243,7 +243,7 @@ class _ScanRulesDialogState extends State<ScanRulesDialog> {
                                       child: AspectRatio(
                                         aspectRatio: 1.0,
                                         child: Image.asset(
-                                          'assets/images/posture_guide_wrong.png',
+                                          'assets/images/posture_guide_wrong.jpg',
                                           fit: BoxFit.cover,
                                         ),
                                       ),

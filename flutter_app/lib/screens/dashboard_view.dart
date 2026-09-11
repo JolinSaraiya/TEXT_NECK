@@ -7,6 +7,7 @@ import '../widgets/exercise_detail_sheet.dart';
 import 'posture_scan_screen.dart'; // From team member's code!
 import 'photo_analysis_screen.dart';
 import '../services/posture_history_manager.dart';
+import 'scan_detail_screen.dart';
 
 class DashboardView extends StatelessWidget {
   final VoidCallback? onProfileTap;
@@ -337,12 +338,11 @@ class DashboardView extends StatelessWidget {
                         result.riskLevel.shortLabel,
                         scoreText,
                         result.riskLevel.color,
+                        session: result,
                       );
                     })
                   else ...[
-                    _buildSessionItem(context, 'Today, 9:14 AM', 'Good', '82%', AppColors.riskLow),
-                    _buildSessionItem(context, 'Yesterday, 6:30 PM', 'Fair', '71%', AppColors.riskModerate),
-                    _buildSessionItem(context, 'Jul 10, 8:00 AM', 'Good', '78%', AppColors.riskLow),
+                    _buildSessionItem(context, 'No scans yet', '', '', AppColors.subtext(context)),
                   ],
                   
                   const SizedBox(height: 100), // padding for the bottom nav bar
@@ -443,55 +443,80 @@ class DashboardView extends StatelessWidget {
     );
   }
 
-  Widget _buildSessionItem(BuildContext context, String date, String status, String score, Color statusColor) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                date,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text(context),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Posture Score',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: AppColors.subtext(context),
-                ),
-              ),
-            ],
+  Widget _buildSessionItem(BuildContext context, String date, String status, String score, Color statusColor, {PostureSessionResult? session}) {
+    return GestureDetector(
+      onTap: session != null ? () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ScanDetailScreen.fromSession(session),
           ),
-          Row(
-            children: [
-              Text(
-                status,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: statusColor,
-                ),
+        );
+      } : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surf(context),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border(context), width: 1),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    date,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text(context),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Posture Score',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppColors.subtext(context),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Text(
-                score,
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.text(context),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+            Row(
+              children: [
+                if (status.isNotEmpty)
+                  Text(
+                    status,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: statusColor,
+                    ),
+                  ),
+                if (score.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  Text(
+                    score,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text(context),
+                    ),
+                  ),
+                ],
+                if (session != null) ...[
+                  const SizedBox(width: 8),
+                  Icon(Icons.chevron_right_rounded, color: AppColors.subtext(context), size: 20),
+                ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

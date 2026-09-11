@@ -44,24 +44,30 @@ class PostureSessionResult {
     };
   }
 
+  /// Craniovertebral Angle (degrees from horizontal baseline).
+  double get craniovertebralAngle => angle <= 45 ? (90.0 - angle) : angle;
+
+  /// Forward head tilt angle (degrees from vertical plumb line).
+  double get forwardTiltAngle => angle <= 45 ? angle : (90.0 - angle);
+
   // Risk score is scaled based on CVA guidelines
   int get riskScore {
-    if (angle >= 48.0) {
+    final cva = craniovertebralAngle;
+    if (cva >= 48.0) {
       return 0; // 0% risk
-    } else if (angle >= 43.0) {
+    } else if (cva >= 43.0) {
       // 43° -> 50% risk, 48° -> 0% risk
-      return (((48.0 - angle) / 5.0) * 50.0).round();
+      return (((48.0 - cva) / 5.0) * 50.0).round();
     } else {
       // 43° -> 50% risk, smaller angle -> closer to 100%
       // Cap 100% at a CVA of 30°
-      return (50.0 + ((43.0 - angle) / 13.0) * 50.0).clamp(50, 100).round();
+      return (50.0 + ((43.0 - cva) / 13.0) * 50.0).clamp(50, 100).round();
     }
   }
 
   // Spine load calculation based on neck angle (cervical spine stress approximations)
   double get spineLoadKg {
-    // CVA is measured from the horizontal. Vertical deviation = 90 - CVA
-    double verticalDeviation = (90.0 - angle).clamp(0.0, 90.0);
+    double verticalDeviation = forwardTiltAngle.clamp(0.0, 90.0);
     
     if (verticalDeviation <= 0) return 5.0;
     if (verticalDeviation <= 15) return 5.0 + (verticalDeviation / 15.0) * 7.0;
