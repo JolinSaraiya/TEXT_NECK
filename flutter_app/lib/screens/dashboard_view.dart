@@ -36,8 +36,9 @@ class DashboardView extends StatelessWidget {
         final manager = PostureHistoryManager();
         final latest = manager.latestResult;
 
-        final int score = latest != null ? (100 - latest.riskScore) : 82;
-        final double progressValue = score / 100.0;
+        final int score = latest != null ? latest.postureScore : (manager.history.isNotEmpty ? manager.averageScore.round() : 0);
+        final double progressValue = (score / 100.0).clamp(0.0, 1.0);
+        final Color statusColor = latest != null ? latest.riskLevel.color : AppColors.primaryAccent;
 
         final int streakVal = manager.streak;
         final int avgScoreVal = manager.averageScore.round();
@@ -154,7 +155,7 @@ class DashboardView extends StatelessWidget {
                                 style: GoogleFonts.inter(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.primaryAccent,
+                                  color: statusColor,
                                 ),
                               ),
                             ),
@@ -169,7 +170,7 @@ class DashboardView extends StatelessWidget {
                                 child: LinearProgressIndicator(
                                   value: progressValue,
                                   backgroundColor: AppColors.surfLight(context),
-                                  valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryAccent),
+                                  valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                                   minHeight: 8,
                                 ),
                               ),
@@ -180,7 +181,7 @@ class DashboardView extends StatelessWidget {
                               style: GoogleFonts.inter(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: AppColors.primaryAccent,
+                                color: statusColor,
                               ),
                             ),
                           ],
@@ -331,7 +332,7 @@ class DashboardView extends StatelessWidget {
                   const SizedBox(height: 16),
                   if (manager.history.isNotEmpty)
                     ...manager.history.map((result) {
-                      final scoreText = '${100 - result.riskScore}%';
+                      final scoreText = '${result.postureScore}%';
                       return _buildSessionItem(
                         context,
                         _formatDateTime(result.timestamp),

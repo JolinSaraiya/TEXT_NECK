@@ -50,20 +50,23 @@ class PostureSessionResult {
   /// Forward head tilt angle (degrees from vertical plumb line).
   double get forwardTiltAngle => angle <= 45 ? angle : (90.0 - angle);
 
-  // Risk score is scaled based on CVA guidelines
+  // Risk score accurately mapped from clinical cervical forward tilt:
+  // 0°..14° (Good): 0%..15% risk -> 85%..100% posture health score
+  // 15°..29° (Warning): 16%..50% risk -> 50%..84% posture health score
+  // 30°+ (Critical): 51%..100% risk -> 0%..49% posture health score
   int get riskScore {
-    final cva = craniovertebralAngle;
-    if (cva >= 48.0) {
-      return 0; // 0% risk
-    } else if (cva >= 43.0) {
-      // 43° -> 50% risk, 48° -> 0% risk
-      return (((48.0 - cva) / 5.0) * 50.0).round();
+    final tilt = forwardTiltAngle.clamp(0.0, 90.0);
+    if (tilt < 15.0) {
+      return ((tilt / 15.0) * 15.0).round().clamp(0, 15);
+    } else if (tilt < 30.0) {
+      return (16.0 + ((tilt - 15.0) / 15.0) * 34.0).round().clamp(16, 50);
     } else {
-      // 43° -> 50% risk, smaller angle -> closer to 100%
-      // Cap 100% at a CVA of 30°
-      return (50.0 + ((43.0 - cva) / 13.0) * 50.0).clamp(50, 100).round();
+      return (51.0 + ((tilt - 30.0) / 30.0) * 49.0).round().clamp(51, 100);
     }
   }
+
+  /// Calculated Posture Health Score (0%..100%).
+  int get postureScore => (100 - riskScore).clamp(0, 100);
 
   // Spine load calculation based on neck angle (cervical spine stress approximations)
   double get spineLoadKg {
@@ -123,13 +126,13 @@ class PostureHistoryManager extends ChangeNotifier {
   int get totalSessions => _history.length;
 
   double get averageScore {
-    if (_history.isEmpty) return 74.0; // Default baseline score
-    final total = _history.map((s) => 100.0 - s.riskScore).reduce((a, b) => a + b);
+    if (_history.isEmpty) return 0.0;
+    final total = _history.map((s) => s.postureScore.toDouble()).reduce((a, b) => a + b);
     return total / _history.length;
   }
 
   int get streak {
-    if (_history.isEmpty) return 7; // Default baseline streak
+    if (_history.isEmpty) return 0;
     return _calculateStreak();
   }
 
@@ -188,6 +191,19 @@ class PostureHistoryManager extends ChangeNotifier {
         
     // Note: The UI will automatically update because the Firestore 
     // snapshot listener will see the new document and call notifyListeners()
+  }
+
+  Future<void> clearHistory() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final snapshots = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('sessions')
+        .get();
+    for (final doc in snapshots.docs) {
+      await doc.reference.delete();
+    }
   }
 
   @override

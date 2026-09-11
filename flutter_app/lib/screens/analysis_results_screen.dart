@@ -63,7 +63,7 @@ class AnalysisResultsScreen extends StatelessWidget {
             // Plot the last 7 sessions, or fill with baseline
             if (i < len) {
               final item = historyList[len - 1 - i]; // chronological order (oldest first)
-              final score = 100.0 - item.riskScore;
+              final score = item.postureScore.toDouble();
               newSpots.add(FlSpot(i.toDouble(), score));
             } else {
               // baseline fallback
@@ -488,7 +488,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     ...manager.history.map((result) {
-                      final scoreText = '${100 - result.riskScore}%';
+                      final scoreText = '${result.postureScore}%';
                       return GestureDetector(
                         onTap: () {
                           Navigator.push(

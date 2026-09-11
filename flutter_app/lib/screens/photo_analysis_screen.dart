@@ -13,6 +13,7 @@ import '../services/posture_history_manager.dart';
 import '../services/pdf_report_service.dart';
 import '../services/web_file_picker.dart';
 import '../widgets/posture_guide_image.dart';
+import '../widgets/exercise_detail_sheet.dart';
 import 'posture_scan_screen.dart';
 
 /// PhotoAnalysisScreen
@@ -826,6 +827,45 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
 
           const SizedBox(height: 20),
 
+          // Recommended Corrective Exercises
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.fitness_center_rounded, color: AppColors.primaryAccent, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Corrective Exercises',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text(context),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: result.riskLevel.color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'To Fix ${result.angle.toStringAsFixed(1)}° Tilt',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: result.riskLevel.color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ..._getPhotoExercises(result.riskLevel, result.angle).map((ex) => _buildPhotoExerciseCard(context, ex)),
+          const SizedBox(height: 20),
+
           // Action Buttons
           ElevatedButton.icon(
             onPressed: () {
@@ -872,4 +912,260 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
       ),
     );
   }
+
+  Widget _buildPhotoExerciseCard(BuildContext context, _PhotoExercise ex) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surf(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border(context), width: 1),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            ExerciseDetailSheet.show(
+              context,
+              title: ex.title,
+              emoji: ex.emoji,
+              time: ex.duration,
+              steps: ex.steps,
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfLight(context),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(ex.emoji, style: const TextStyle(fontSize: 22)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            ex.title,
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.text(context),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Icon(Icons.timer_outlined, size: 12, color: AppColors.subtext(context)),
+                              const SizedBox(width: 4),
+                              Text(
+                                ex.duration,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppColors.primaryAccent,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text('•', style: TextStyle(color: AppColors.subtext(context), fontSize: 10)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  ex.target,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppColors.subtext(context),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryAccent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.play_arrow_rounded, color: AppColors.primaryAccent, size: 16),
+                          SizedBox(width: 2),
+                          Text(
+                            'Start',
+                            style: TextStyle(
+                              color: AppColors.primaryAccent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  ex.why,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppColors.subtext(context),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<_PhotoExercise> _getPhotoExercises(RiskLevel level, double tiltAngle) {
+    if (level == RiskLevel.critical || tiltAngle >= 30.0) {
+      return const [
+        _PhotoExercise(
+          title: 'Chin Tuck with Overpressure',
+          emoji: '🧘',
+          duration: '3 min',
+          target: 'Deep Cervical Flexors',
+          why: 'Directly counteracts severe forward tilt by pulling the cervical vertebrae back into alignment.',
+          steps: [
+            'Sit tall with shoulders back and eyes level.',
+            'Use two fingers on your chin to gently push head backwards into retraction.',
+            'Hold the retracted position firmly for 5 seconds.',
+            'Perform 3 sets of 10 repetitions.',
+          ],
+        ),
+        _PhotoExercise(
+          title: 'Doorway Pec & Chest Stretch',
+          emoji: '🚪',
+          duration: '3 min',
+          target: 'Pectoralis Minor & Major',
+          why: 'Opens hunched chest wall pulling the head and shoulders into acute forward tilt.',
+          steps: [
+            'Stand in an open doorway with elbows raised at 90° against the frame.',
+            'Step forward gently until a stretch is felt across your chest.',
+            'Hold for 30 seconds while breathing steadily.',
+            'Repeat 3 times.',
+          ],
+        ),
+        _PhotoExercise(
+          title: 'Upper Trapezius Release',
+          emoji: '🔄',
+          duration: '3 min',
+          target: 'Upper Trapezius & Extensors',
+          why: 'Relieves chronic muscle shortening and posterior tension headache triggers.',
+          steps: [
+            'Sit upright and anchor your right hand beneath your chair.',
+            'Tilt left ear gently toward left shoulder.',
+            'Hold for 30 seconds, then switch sides.',
+          ],
+        ),
+      ];
+    } else if (level == RiskLevel.warning || tiltAngle >= 15.0) {
+      return const [
+        _PhotoExercise(
+          title: 'Chin Tuck & Hold',
+          emoji: '🧘',
+          duration: '2 min',
+          target: 'Longus Colli & Cervical Flexors',
+          why: 'Directly targets the 15°–29° forward tilt by strengthening deep neck flexor muscles.',
+          steps: [
+            'Look straight ahead with relaxed shoulders.',
+            'Draw chin straight back as if making a double chin.',
+            'Hold firmly for 5 seconds.',
+            'Repeat 12 times.',
+          ],
+        ),
+        _PhotoExercise(
+          title: 'Scapular Retraction Pinch',
+          emoji: '💪',
+          duration: '2 min',
+          target: 'Rhomboids & Mid-Trapezius',
+          why: 'Stabilizes shoulder blades to create a solid base that keeps your neck upright.',
+          steps: [
+            'Sit or stand upright with arms by your sides.',
+            'Squeeze shoulder blades together firmly without raising shoulders.',
+            'Hold for 5 seconds and release slowly.',
+            'Repeat 15 times.',
+          ],
+        ),
+        _PhotoExercise(
+          title: 'Corner Chest Stretch',
+          emoji: '🚪',
+          duration: '2 min',
+          target: 'Anterior Chest Wall',
+          why: 'Lengthens tight chest muscles from desk slouching to allow head to sit vertically.',
+          steps: [
+            'Stand facing a wall corner with forearms on walls.',
+            'Lean chest forward until a gentle stretch is felt across collarbones.',
+            'Hold for 30 seconds, breathe deeply, and repeat 3 times.',
+          ],
+        ),
+      ];
+    } else {
+      return const [
+        _PhotoExercise(
+          title: 'Posture Neutral Chin Tuck',
+          emoji: '🧘',
+          duration: '1 min',
+          target: 'Neutral Plumb Line',
+          why: 'Maintains healthy neuromuscular alignment to preserve good cervical posture.',
+          steps: [
+            'Keep head balanced neutrally over shoulders.',
+            'Perform 8 gentle chin retractions holding 3 seconds each.',
+          ],
+        ),
+        _PhotoExercise(
+          title: 'Shoulder Shrug & Roll',
+          emoji: '💪',
+          duration: '1 min',
+          target: 'Trapezius Relaxation',
+          why: 'Discharges muscular tension that accumulates throughout the workday.',
+          steps: [
+            'Lift shoulders up towards ears as high as comfortable.',
+            'Hold for 3 seconds, then roll back and release down.',
+            'Repeat 10 times.',
+          ],
+        ),
+      ];
+    }
+  }
 }
+
+class _PhotoExercise {
+  final String title;
+  final String emoji;
+  final String duration;
+  final String target;
+  final String why;
+  final List<String> steps;
+
+  const _PhotoExercise({
+    required this.title,
+    required this.emoji,
+    required this.duration,
+    required this.target,
+    required this.why,
+    required this.steps,
+  });
+}
+
