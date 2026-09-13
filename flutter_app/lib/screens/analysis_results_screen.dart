@@ -30,29 +30,21 @@ class AnalysisResultsScreen extends StatelessWidget {
         final latest = manager.latestResult;
 
         // Use real or mock values
-        final String dateText = latest != null ? _formatDateTime(latest.timestamp) : 'Jul 12, 2026 - 10:42 AM';
-        final int riskScoreValue = latest != null ? latest.riskScore : 34;
-        final double neckAngleValue = latest != null ? latest.angle : 34.2;
-        final double spineLoadValue = latest != null ? latest.spineLoadKg : 27.0;
-        final RiskLevel riskLevel = latest != null ? latest.riskLevel : RiskLevel.warning;
+        final String dateText = latest != null ? _formatDateTime(latest.timestamp) : 'No scans yet';
+        final int riskScoreValue = latest != null ? latest.riskScore : 0;
+        final double neckAngleValue = latest != null ? latest.angle : 0.0;
+        final double spineLoadValue = latest != null ? latest.spineLoadKg : 0.0;
+        final RiskLevel riskLevel = latest != null ? latest.riskLevel : RiskLevel.good;
 
         // Dynamic risk color and label
-        final Color riskColor = riskLevel.color;
-        final String riskLabel = riskLevel.label;
+        final Color riskColor = latest != null ? riskLevel.color : AppColors.subtext(context);
+        final String riskLabel = latest != null ? riskLevel.label : 'N/A';
 
         // Dynamic stress ratio
         final double stressRatio = spineLoadValue / 5.0; // Normal is ~5kg
 
         // Chart spots
-        List<FlSpot> spots = const [
-          FlSpot(0, 68),
-          FlSpot(1, 65),
-          FlSpot(2, 75),
-          FlSpot(3, 62),
-          FlSpot(4, 71),
-          FlSpot(5, 78),
-          FlSpot(6, 82),
-        ];
+        List<FlSpot> spots = [];
 
         // If we have actual history, let's plot the history of posture scores (100 - riskScore)
         if (manager.history.isNotEmpty) {
@@ -67,10 +59,14 @@ class AnalysisResultsScreen extends StatelessWidget {
               newSpots.add(FlSpot(i.toDouble(), score));
             } else {
               // baseline fallback
-              newSpots.add(FlSpot(i.toDouble(), 70.0));
+              newSpots.add(FlSpot(i.toDouble(), 100.0)); // 100 is perfect score
             }
           }
           spots = newSpots;
+        } else {
+          for (int i = 0; i < 7; i++) {
+            spots.add(FlSpot(i.toDouble(), 0));
+          }
         }
 
         final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -322,7 +318,7 @@ class AnalysisResultsScreen extends StatelessWidget {
                         Text(
                           latest != null 
                             ? 'Your neck is tilted at ${neckAngleValue.toStringAsFixed(1)}°, causing approximately ${spineLoadValue.toStringAsFixed(1)}kg of stress on your cervical spine — roughly ${stressRatio.toStringAsFixed(1)}x its normal load. This increases your risk of text neck syndrome if sustained.'
-                            : 'Your neck is tilted at 34.2°, causing approximately 27.0kg of stress on your cervical spine — roughly 5.4x its normal load. This increases your risk of text neck syndrome if sustained.',
+                            : 'Complete a scan to see your detailed neck angle and cervical spine load analysis here.',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: AppColors.subtext(context),
