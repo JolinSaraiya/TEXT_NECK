@@ -201,9 +201,41 @@ class _LoginScreenState extends State<LoginScreen> {
               Center(
                 child: Image.asset(
                   'assets/images/app_icon.png',
-                  width: 300,
-                  height: 300,
+                  width: 180,
+                  height: 180,
                   fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Image.network(
+                      'assets/images/app_icon.png',
+                      width: 180,
+                      height: 180,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Image.network(
+                          'app_icon.png',
+                          width: 180,
+                          height: 180,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: AppColors.primaryAccent, width: 2),
+                              ),
+                              child: const Icon(
+                                Icons.accessibility_new_rounded,
+                                color: AppColors.primaryAccent,
+                                size: 54,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
 
