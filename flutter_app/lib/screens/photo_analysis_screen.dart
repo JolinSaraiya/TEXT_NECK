@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../posture/cva_angle_painter.dart';
 import '../services/posture_history_manager.dart';
 import '../services/pdf_report_service.dart';
 import '../services/web_file_picker.dart';
+import '../services/web_pose_bridge.dart';
 import '../widgets/posture_guide_image.dart';
 import '../widgets/exercise_detail_sheet.dart';
 import 'posture_scan_screen.dart';
@@ -98,7 +100,7 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
 
     try {
       await Future.delayed(const Duration(milliseconds: 600));
-      _evaluatePhotoPoseWeb(bytes);
+      await _evaluatePhotoPoseWeb(bytes);
     } catch (e) {
       setState(() {
         _isAnalyzing = false;
@@ -196,11 +198,11 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
     // Simulated / fallback computer vision analyzer on web
     await Future.delayed(const Duration(milliseconds: 600));
 
-    _evaluatePhotoPoseWeb(bytes);
+    await _evaluatePhotoPoseWeb(bytes);
   }
 
-  void _evaluatePhotoPoseWeb(Uint8List bytes) {
-    // Detect if this is a front-facing / wrong photo
+  Future<void> _evaluatePhotoPoseWeb(Uint8List bytes) async {
+    // Detect if this is a known wrong/front-facing sample photo
     final fileName = _selectedFileName?.toLowerCase() ?? '';
     final bool isKnownWrong = fileName.contains('wrong') || 
                               fileName.contains('front') || 
@@ -211,28 +213,60 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
       return;
     }
 
-    // In a photo evaluation, calculate clean cervical angle and torso plumb
-    const double simulatedTilt = 16.5;
-    const double simulatedCva = 73.5;
-    final RiskLevel risk = NeckAngleCalculator.classifyRisk(simulatedTilt);
+    // Convert image bytes to a data URL for the JS MediaPipe bridge
+    final String base64Data = base64Encode(bytes);
+    // Detect MIME type from magic bytes
+    String mimeType = 'image/jpeg';
+    if (bytes.length > 8 && bytes[0] == 0x89 && bytes[1] == 0x50) {
+      mimeType = 'image/png';
+    } else if (bytes.length > 4 && bytes[0] == 0x52 && bytes[1] == 0x49) {
+      mimeType = 'image/webp';
+    }
+    final String dataUrl = 'data:$mimeType;base64,$base64Data';
+
+    debugPrint('[PhotoAnalysis] Sending image to MediaPipe for real pose detection...');
+
+    // Run real MediaPipe pose detection on the photo
+    await WebPoseBridge.analyzeStaticImage(dataUrl);
+    final webPose = WebPoseBridge.getStaticPoseResult();
+
+    if (webPose == null || !webPose.hasPose) {
+      _handleWrongPhoto(
+        "No person detected in the photo. Please upload a clear photo of yourself standing or sitting sideways.",
+      );
+      return;
+    }
+
+    if (!webPose.isSideProfile) {
+      _handleWrongPhoto(
+        "Front-facing photo detected. Posture angles (CVA) cannot be measured from the front. Please upload a 90° lateral side profile photo.",
+      );
+      return;
+    }
+
+    // Build result from real MediaPipe landmarks
+    final double calculatedAngle = webPose.neckAngle;
+    final RiskLevel risk = NeckAngleCalculator.classifyRisk(calculatedAngle);
 
     final result = NeckAngleResult(
-      angle: simulatedTilt,
-      cvaAngle: simulatedCva,
+      angle: calculatedAngle,
+      cvaAngle: webPose.cvaAngle ?? (90.0 - calculatedAngle),
       riskLevel: risk,
-      earSide: 'right',
-      earConfidence: 0.92,
-      shoulderConfidence: 0.94,
+      earSide: webPose.side,
+      earConfidence: webPose.earConfidence,
+      shoulderConfidence: webPose.shoulderConfidence,
       isSideProfile: true,
-      earPoint: const Offset(0.46, 0.28),
-      shoulderPoint: const Offset(0.50, 0.44),
-      hipPoint: const Offset(0.51, 0.68),
-      hasHip: true,
-      torsoAngle: 4.2,
-      spinePlumbAngle: 172.5,
-      rawDeltaX: 0.04,
-      rawDeltaY: 0.16,
+      earPoint: webPose.ear,
+      shoulderPoint: webPose.shoulder,
+      hipPoint: webPose.hip,
+      hasHip: webPose.hasHip,
+      torsoAngle: webPose.torsoAngle,
+      spinePlumbAngle: webPose.spinePlumbAngle,
+      rawDeltaX: webPose.dx,
+      rawDeltaY: webPose.dy,
     );
+
+    debugPrint('[PhotoAnalysis] Real pose result: $result');
 
     setState(() {
       _result = result;
@@ -708,11 +742,13 @@ class _PhotoAnalysisScreenState extends State<PhotoAnalysisScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // User Photo
+                  // User Photo — BoxFit.cover fills the container so
+                  // the CvaAnglePainter's normalized (0–1) coordinates
+                  // map correctly onto the visible image area.
                   if (_imageBytes != null)
                     Image.memory(
                       _imageBytes!,
-                      fit: BoxFit.contain,
+                      fit: BoxFit.cover,
                     ),
 
                   // Biomechanical Vectors CustomPainter (isMirrored: false for photo)

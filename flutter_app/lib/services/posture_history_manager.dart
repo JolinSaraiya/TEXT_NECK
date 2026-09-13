@@ -91,12 +91,13 @@ class PostureHistoryManager extends ChangeNotifier {
   StreamSubscription<User?>? _authSub;
 
   PostureHistoryManager._internal() {
-    // Listen to authentication state changes to fetch the correct user's data
-    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+    // Listen to idTokenChanges to ensure the auth token is fully propagated to Firestore
+    _authSub = FirebaseAuth.instance.idTokenChanges().listen((user) {
       if (user != null) {
         _subscribeToSessions(user.uid);
       } else {
         _sessionSub?.cancel();
+        _sessionSub = null;
         _history.clear();
         notifyListeners();
       }
@@ -116,6 +117,16 @@ class PostureHistoryManager extends ChangeNotifier {
           .map((doc) => PostureSessionResult.fromMap(doc.data()))
           .toList();
       notifyListeners();
+    }, onError: (error) {
+      debugPrint("Error fetching history: $error");
+      // Handle the case where Firestore throws an error (e.g., permission denied) due to race conditions
+      // by attempting to reconnect after a short delay.
+      Future.delayed(const Duration(seconds: 1), () {
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser != null && currentUser.uid == uid) {
+          _subscribeToSessions(uid);
+        }
+      });
     });
   }
 
