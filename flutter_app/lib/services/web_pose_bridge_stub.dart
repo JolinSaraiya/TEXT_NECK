@@ -5,3 +5,5 @@ WebPoseLandmarks? getLatestPose() => null;
 Future<void> analyzeStaticImage(String dataUrl) async {}
 
 WebPoseLandmarks? getStaticPoseResult() => null;
+
+void setPoseStreamActive(bool active) {}

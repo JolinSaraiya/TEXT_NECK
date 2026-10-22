@@ -161,3 +161,11 @@ WebPoseLandmarks? getStaticPoseResult() {
     return null;
   }
 }
+
+void setPoseStreamActive(bool active) {
+  try {
+    js.context['_poseStreamActive'] = active;
+  } catch (e) {
+    debugPrint('[WebPoseBridge] setPoseStreamActive error: $e');
+  }
+}

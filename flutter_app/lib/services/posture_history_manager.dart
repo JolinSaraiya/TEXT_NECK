@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../posture/neck_angle_calculator.dart';
 
 class PostureSessionResult {
@@ -21,16 +23,63 @@ class PostureSessionResult {
 
   // Factory to create from Firestore Map
   factory PostureSessionResult.fromMap(Map<String, dynamic> data) {
+    DateTime ts;
+    final rawTs = data['timestamp'];
+    if (rawTs is Timestamp) {
+      ts = rawTs.toDate();
+    } else if (rawTs is String) {
+      ts = DateTime.tryParse(rawTs) ?? DateTime.now();
+    } else if (rawTs is int) {
+      ts = DateTime.fromMillisecondsSinceEpoch(rawTs);
+    } else {
+      ts = DateTime.now();
+    }
+
     return PostureSessionResult(
-      timestamp: (data['timestamp'] as Timestamp).toDate(),
-      angle: (data['angle'] ?? 0.0).toDouble(),
+      timestamp: ts,
+      angle: (data['angle'] as num?)?.toDouble() ?? 0.0,
       riskLevel: RiskLevel.values.firstWhere(
         (e) => e.name == data['riskLevel'], 
         orElse: () => RiskLevel.warning,
       ),
-      earSide: data['earSide'] ?? 'unknown',
-      frameCount: data['frameCount'] ?? 0,
+      earSide: (data['earSide'] as String?) ?? 'unknown',
+      frameCount: (data['frameCount'] as num?)?.toInt() ?? 0,
     );
+  }
+
+  // Factory to create from Local JSON Map
+  factory PostureSessionResult.fromJson(Map<String, dynamic> json) {
+    DateTime ts;
+    final rawTs = json['timestamp'];
+    if (rawTs is String) {
+      ts = DateTime.tryParse(rawTs) ?? DateTime.now();
+    } else if (rawTs is int) {
+      ts = DateTime.fromMillisecondsSinceEpoch(rawTs);
+    } else {
+      ts = DateTime.now();
+    }
+
+    return PostureSessionResult(
+      timestamp: ts,
+      angle: (json['angle'] as num?)?.toDouble() ?? 0.0,
+      riskLevel: RiskLevel.values.firstWhere(
+        (e) => e.name == json['riskLevel'],
+        orElse: () => RiskLevel.warning,
+      ),
+      earSide: (json['earSide'] as String?) ?? 'unknown',
+      frameCount: (json['frameCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  // Convert to JSON Map for SharedPreferences
+  Map<String, dynamic> toJson() {
+    return {
+      'timestamp': timestamp.toIso8601String(),
+      'angle': angle,
+      'riskLevel': riskLevel.name,
+      'earSide': earSide,
+      'frameCount': frameCount,
+    };
   }
 
   // Convert to Map for Firestore
@@ -89,19 +138,79 @@ class PostureHistoryManager extends ChangeNotifier {
   List<PostureSessionResult> _history = [];
   StreamSubscription<QuerySnapshot>? _sessionSub;
   StreamSubscription<User?>? _authSub;
+  String? _activeUid;
 
   PostureHistoryManager._internal() {
-    // Listen to idTokenChanges to ensure the auth token is fully propagated to Firestore
+    // 1. Immediately check current user upon singleton initialization
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      _activeUid = currentUser.uid;
+      _loadLocalHistory(currentUser.uid);
+      _subscribeToSessions(currentUser.uid);
+    } else {
+      _loadLocalHistory(null);
+    }
+
+    // 2. Listen to idTokenChanges to ensure auth token state changes are fully handled
     _authSub = FirebaseAuth.instance.idTokenChanges().listen((user) {
       if (user != null) {
+        _activeUid = user.uid;
+        _loadLocalHistory(user.uid);
         _subscribeToSessions(user.uid);
       } else {
+        _activeUid = null;
         _sessionSub?.cancel();
         _sessionSub = null;
         _history.clear();
         notifyListeners();
       }
     });
+  }
+
+  /// Load session history from persistent SharedPreferences storage.
+  Future<void> _loadLocalHistory(String? uid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = uid != null ? 'posture_sessions_$uid' : 'posture_sessions_last_active';
+      List<String>? jsonList = prefs.getStringList(key);
+
+      // Fallback to active backup if specific user key is empty
+      if ((jsonList == null || jsonList.isEmpty) && uid != null) {
+        jsonList = prefs.getStringList('posture_sessions_last_active');
+      }
+
+      if (jsonList != null && jsonList.isNotEmpty) {
+        final loaded = <PostureSessionResult>[];
+        for (final item in jsonList) {
+          try {
+            final map = jsonDecode(item) as Map<String, dynamic>;
+            loaded.add(PostureSessionResult.fromJson(map));
+          } catch (e) {
+            debugPrint('Error parsing session from local storage: $e');
+          }
+        }
+        if (loaded.isNotEmpty) {
+          _history = loaded;
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading local history: $e');
+    }
+  }
+
+  /// Persist session history to persistent SharedPreferences storage.
+  Future<void> _saveLocalHistory(String? uid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _history.map((s) => jsonEncode(s.toJson())).toList();
+      if (uid != null) {
+        await prefs.setStringList('posture_sessions_$uid', jsonList);
+      }
+      await prefs.setStringList('posture_sessions_last_active', jsonList);
+    } catch (e) {
+      debugPrint('Error saving local history: $e');
+    }
   }
 
   void _subscribeToSessions(String uid) {
@@ -113,17 +222,33 @@ class PostureHistoryManager extends ChangeNotifier {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .listen((snapshot) {
-      _history = snapshot.docs
-          .map((doc) => PostureSessionResult.fromMap(doc.data()))
-          .toList();
+      final firestoreList = snapshot.docs.map((doc) {
+        return PostureSessionResult.fromMap(doc.data());
+      }).toList();
+
+      // Merge Firestore documents with local sessions so no scan is ever lost
+      final Map<String, PostureSessionResult> merged = {};
+      for (final s in firestoreList) {
+        final key = '${s.timestamp.millisecondsSinceEpoch}_${s.angle.toStringAsFixed(1)}';
+        merged[key] = s;
+      }
+      for (final s in _history) {
+        final key = '${s.timestamp.millisecondsSinceEpoch}_${s.angle.toStringAsFixed(1)}';
+        merged.putIfAbsent(key, () => s);
+      }
+
+      final resultList = merged.values.toList()
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+      _history = resultList;
+      _saveLocalHistory(uid);
       notifyListeners();
     }, onError: (error) {
-      debugPrint("Error fetching history: $error");
-      // Handle the case where Firestore throws an error (e.g., permission denied) due to race conditions
-      // by attempting to reconnect after a short delay.
-      Future.delayed(const Duration(seconds: 1), () {
+      debugPrint("Firestore fetch error: $error");
+      // If Firestore has network or permission delay, local storage remains safe and displayed.
+      Future.delayed(const Duration(seconds: 2), () {
         final currentUser = FirebaseAuth.instance.currentUser;
-        if (currentUser != null && currentUser.uid == uid) {
+        if (currentUser != null && currentUser.uid == uid && _sessionSub != null) {
           _subscribeToSessions(uid);
         }
       });
@@ -183,7 +308,7 @@ class PostureHistoryManager extends ChangeNotifier {
     required int frameCount,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    final uid = user?.uid ?? _activeUid;
 
     final session = PostureSessionResult(
       timestamp: DateTime.now(),
@@ -193,27 +318,57 @@ class PostureHistoryManager extends ChangeNotifier {
       frameCount: frameCount,
     );
 
-    // Write to Firestore
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('sessions')
-        .add(session.toMap());
-        
-    // Note: The UI will automatically update because the Firestore 
-    // snapshot listener will see the new document and call notifyListeners()
+    // 1. Immediately insert into in-memory history (real-time instant UI update!)
+    _history.insert(0, session);
+    notifyListeners();
+
+    // 2. Persist locally to SharedPreferences immediately
+    await _saveLocalHistory(uid);
+
+    // 3. Sync to Firestore in the background
+    if (user != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('sessions')
+            .add(session.toMap());
+      } catch (e) {
+        debugPrint("Warning: Firestore sync error, safely kept in local storage: $e");
+      }
+    }
   }
 
   Future<void> clearHistory() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final snapshots = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('sessions')
-        .get();
-    for (final doc in snapshots.docs) {
-      await doc.reference.delete();
+    final uid = user?.uid ?? _activeUid;
+
+    _history.clear();
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (uid != null) {
+        await prefs.remove('posture_sessions_$uid');
+      }
+      await prefs.remove('posture_sessions_last_active');
+    } catch (e) {
+      debugPrint('Error clearing local history: $e');
+    }
+
+    if (user != null) {
+      try {
+        final snapshots = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('sessions')
+            .get();
+        for (final doc in snapshots.docs) {
+          await doc.reference.delete();
+        }
+      } catch (e) {
+        debugPrint('Error clearing Firestore history: $e');
+      }
     }
   }
 
@@ -224,4 +379,5 @@ class PostureHistoryManager extends ChangeNotifier {
     super.dispose();
   }
 }
+
 

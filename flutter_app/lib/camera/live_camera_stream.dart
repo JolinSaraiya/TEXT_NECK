@@ -74,7 +74,7 @@ class LiveCameraStreamState extends State<LiveCameraStream>
   bool _isCameraInitialized = false;
 
   // ── ML Kit Pose Detection ──────────────────────────────────────────────
-  final PoseDetector _poseDetector = PoseDetector(
+  final PoseDetector? _poseDetector = kIsWeb ? null : PoseDetector(
     options: PoseDetectorOptions(
       // Stream mode: optimized for real-time processing (lower accuracy,
       // higher throughput vs. single-image mode).
@@ -112,7 +112,7 @@ class LiveCameraStreamState extends State<LiveCameraStream>
     WidgetsBinding.instance.removeObserver(this);
     _stopStreaming();
     _cameraController?.dispose();
-    _poseDetector.close();
+    _poseDetector?.close();
     super.dispose();
   }
 
@@ -289,7 +289,7 @@ class LiveCameraStreamState extends State<LiveCameraStream>
       }
 
       // ── STEP 3b: Run ML Kit Pose Detection ──
-      final List<Pose> poses = await _poseDetector.processImage(inputImage);
+      final List<Pose> poses = await _poseDetector!.processImage(inputImage);
 
       // ── STEP 3c: Process First Detected Pose ──
       if (poses.isNotEmpty && mounted) {

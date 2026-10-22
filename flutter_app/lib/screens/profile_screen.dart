@@ -31,20 +31,20 @@ class ProfileScreen extends StatelessWidget {
           backgroundColor: AppColors.bg(context),
           body: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Header Title
-                  Text(
-                    'Profile',
-                    style: GoogleFonts.inter(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text(context),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
+                      // Header Title
+                      Text(
+                        'Profile',
+                        style: GoogleFonts.inter(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.text(context),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
 
                   // Profile Card
                   Container(
@@ -199,12 +199,13 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                   
-                  const SizedBox(height: 100), // padding for the bottom nav bar
-                ],
+                      // Generous bottom padding to clear the floating nav pill completely
+                      const SizedBox(height: 140),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-        );
+            );
       },
     );
   }

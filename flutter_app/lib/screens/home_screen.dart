@@ -16,16 +16,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  late final List<Widget> _screens;
 
   @override
-  Widget build(BuildContext context) {
-    final List<Widget> screens = [
+  void initState() {
+    super.initState();
+    _screens = [
       DashboardView(
         onProfileTap: () => _onItemTapped(3),
         onExercisesTap: () => _onItemTapped(2),
@@ -34,17 +30,31 @@ class _HomeScreenState extends State<HomeScreen> {
       const ExerciseScreen(),
       const ProfileScreen(),
     ];
+  }
 
+  void _onItemTapped(int index) {
+    if (_selectedIndex != index) {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: AppColors.bg(context),
       body: Stack(
         children: [
-          // Current Active Screen
-          screens[_selectedIndex],
+          // Preserve tab states with IndexedStack for instant zero-lag switching
+          IndexedStack(
+            index: _selectedIndex,
+            children: _screens,
+          ),
 
-          // Floating Pill Navigation Bar (Matching Design Screenshots)
+          // Floating Pill Navigation Bar (Full Desktop Width)
           Positioned(
             bottom: 24,
             left: 20,

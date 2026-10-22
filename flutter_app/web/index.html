@@ -39,6 +39,20 @@
     window._poseTracker = null;
     window._latestPoseData = null;
     window._isPoseDetecting = false;
+    window._poseStreamActive = false;
+
+    // ── Global Video Interception ──
+    // Flutter hides the camera <video> inside isolated Shadow DOMs (flt-glass-pane).
+    // The most bulletproof way to find it is to intercept its creation.
+    window._activeVideos = [];
+    const originalCreateElement = document.createElement.bind(document);
+    document.createElement = function(tagName, options) {
+      const el = originalCreateElement(tagName, options);
+      if (typeof tagName === 'string' && tagName.toLowerCase() === 'video') {
+        window._activeVideos.push(el);
+      }
+      return el;
+    };
 
     function initMediaPipePose() {
       if (window._poseTracker || typeof Pose === 'undefined') return;
@@ -171,27 +185,39 @@
         window._poseTracker = pose;
         console.log("[MediaPipe] Pose Tracker successfully ready");
 
-        // Continuously capture video frames from the webcam
+        // Continuously capture video frames from the webcam only when active
         function findActiveVideo() {
-          const videos = document.getElementsByTagName('video');
-          for (let i = 0; i < videos.length; i++) {
-            const v = videos[i];
-            if (v && v.readyState >= 2 && !v.paused) return v;
+          for (let i = window._activeVideos.length - 1; i >= 0; i--) {
+            const v = window._activeVideos[i];
+            if (v && v.isConnected && !v.paused && v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0) {
+              if (v.srcObject && v.srcObject.active === false) continue;
+              return v;
+            }
           }
           return null;
         }
 
         let lastProcessTime = 0;
+        let isProcessingFrame = false;
         async function runDetectionLoop() {
+          // Zero lag optimization: Only run when scan screen is actively scanning
+          if (!window._poseStreamActive) {
+            requestAnimationFrame(runDetectionLoop);
+            return;
+          }
+
           const now = Date.now();
-          if (now - lastProcessTime > 65) { // ~15 FPS
+          if (!isProcessingFrame && (now - lastProcessTime > 80)) { // ~12 FPS: smooth, zero CPU freeze
             const video = findActiveVideo();
-            if (video && window._poseTracker) {
+            if (video && window._poseTracker && !video.paused) {
+              isProcessingFrame = true;
               try {
                 lastProcessTime = now;
                 await window._poseTracker.send({ image: video });
               } catch (e) {
                 // Ignore transient frame skips
+              } finally {
+                isProcessingFrame = false;
               }
             }
           }

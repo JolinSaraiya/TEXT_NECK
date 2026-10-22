@@ -97,6 +97,9 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
 
   @override
   void dispose() {
+    if (kIsWeb) {
+      WebPoseBridge.setPoseStreamActive(false);
+    }
     _webCalculationTimer?.cancel();
     _watchdogTimer?.cancel();
     super.dispose();
@@ -139,6 +142,7 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
     }
 
     if (kIsWeb) {
+      WebPoseBridge.setPoseStreamActive(true);
       _startWebCalculationStream();
     }
 
@@ -320,6 +324,9 @@ class _PostureScanScreenState extends State<PostureScanScreen> {
   ///
   /// Tells Member 1's LiveCameraStream to stop streaming.
   Future<void> _endSession() async {
+    if (kIsWeb) {
+      WebPoseBridge.setPoseStreamActive(false);
+    }
     _webCalculationTimer?.cancel();
     _webCalculationTimer = null;
     _watchdogTimer?.cancel();

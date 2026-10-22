@@ -40,25 +40,29 @@ class DashboardView extends StatelessWidget {
       builder: (context, _) {
         final manager = PostureHistoryManager();
         final latest = manager.latestResult;
+        final bool hasData = manager.history.isNotEmpty;
         final int score = latest != null
             ? latest.postureScore
-            : (manager.history.isNotEmpty ? manager.averageScore.round() : 62);
-        final double progressValue = (score / 100.0).clamp(0.0, 1.0);
-        final Color statusColor =
-            latest != null ? latest.riskLevel.color : const Color(0xFFF59E0B);
-        final int streakVal = manager.streak > 0 ? manager.streak : 1;
-        final int avgScoreVal = manager.history.isNotEmpty ? manager.averageScore.round() : 59;
-        final int totalSessionsVal = manager.totalSessions > 0 ? manager.totalSessions : 2;
+            : (hasData ? manager.averageScore.round() : 0);
+        final double progressValue = hasData ? (score / 100.0).clamp(0.0, 1.0) : 0.0;
+        final Color statusColor = latest != null
+            ? latest.riskLevel.color
+            : (hasData ? AppColors.brandGreen : AppColors.subtext(context));
+        final int streakVal = manager.streak;
+        final int avgScoreVal = hasData ? manager.averageScore.round() : 0;
+        final int totalSessionsVal = manager.totalSessions;
         final String angleLabel = latest != null
             ? 'Last angle: ${latest.angle.toStringAsFixed(1)}\u00b0'
-            : 'Last angle: 24.6\u00b0';
-        final String statusLabel = latest != null ? latest.riskLevel.shortLabel : 'Warning';
+            : (hasData ? 'Posture active' : 'No scans yet');
+        final String statusLabel = latest != null
+            ? latest.riskLevel.shortLabel
+            : (hasData ? 'Active' : 'No scans yet');
 
         return Container(
           color: AppColors.bg(context),
           child: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -190,7 +194,7 @@ class DashboardView extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Text(
-                              '$score',
+                              hasData ? '$score' : '--',
                               style: GoogleFonts.inter(
                                 fontSize: 48,
                                 fontWeight: FontWeight.w900,
@@ -198,22 +202,21 @@ class DashboardView extends StatelessWidget {
                                 height: 1.0,
                               ),
                             ),
-                            Text(
-                              '%',
-                              style: GoogleFonts.inter(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.brandGreen,
+                            if (hasData)
+                              Text(
+                                '%',
+                                style: GoogleFonts.inter(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w800,
+                                  color: statusColor,
+                                ),
                               ),
-                            ),
                             const SizedBox(width: 14),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: isDark
-                                    ? const Color(0xFF133829)
-                                    : const Color(0xFFE6F4EA),
+                                color: statusColor.withValues(alpha: isDark ? 0.22 : 0.14),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
@@ -221,9 +224,7 @@ class DashboardView extends StatelessWidget {
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
-                                  color: isDark
-                                      ? const Color(0xFF10B981)
-                                      : const Color(0xFF059669),
+                                  color: statusColor,
                                 ),
                               ),
                             ),
@@ -238,8 +239,8 @@ class DashboardView extends StatelessWidget {
                             backgroundColor: isDark
                                 ? const Color(0xFF263346)
                                 : const Color(0xFFE5E7EB),
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                                AppColors.brandGreen),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                hasData ? statusColor : AppColors.subtext(context)),
                             minHeight: 10,
                           ),
                         ),
@@ -250,17 +251,23 @@ class DashboardView extends StatelessWidget {
                               fontSize: 13,
                               color: AppColors.subtext(context),
                             ),
-                            children: [
-                              const TextSpan(
-                                  text: 'Your last posture status was classified as '),
-                              TextSpan(
-                                text: '$statusLabel.',
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w800,
-                                  color: statusColor,
-                                ),
-                              ),
-                            ],
+                            children: hasData
+                                ? [
+                                    const TextSpan(
+                                        text: 'Your last posture status was classified as '),
+                                    TextSpan(
+                                      text: '$statusLabel.',
+                                      style: GoogleFonts.inter(
+                                        fontWeight: FontWeight.w800,
+                                        color: statusColor,
+                                      ),
+                                    ),
+                                  ]
+                                : [
+                                    const TextSpan(
+                                      text: 'Start a scan below to measure your posture in real time.',
+                                    ),
+                                  ],
                           ),
                         ),
                       ],
@@ -286,7 +293,7 @@ class DashboardView extends StatelessWidget {
                       const SizedBox(width: 10),
                       _StatCard(
                         icon: Icons.bar_chart_rounded,
-                        value: '$avgScoreVal%',
+                        value: hasData ? '$avgScoreVal%' : '--',
                         unit: '',
                         label: 'Avg Score',
                         iconColor: AppColors.avgIconLight,
@@ -530,7 +537,7 @@ class DashboardView extends StatelessWidget {
                   else
                     _EmptyState(context: context),
 
-                  const SizedBox(height: 110),
+                  const SizedBox(height: 140),
                 ],
               ),
             ),

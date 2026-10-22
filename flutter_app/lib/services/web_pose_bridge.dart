@@ -52,4 +52,7 @@ class WebPoseBridge {
 
   /// Reads the result of the last static image analysis.
   static WebPoseLandmarks? getStaticPoseResult() => bridge.getStaticPoseResult();
+
+  /// Activates or pauses background video processing loop for zero CPU lag.
+  static void setPoseStreamActive(bool active) => bridge.setPoseStreamActive(active);
 }
