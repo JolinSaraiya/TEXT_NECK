@@ -1,17 +1,17 @@
-# flutter_app
+# PostureSense — Flutter Client
 
-A new Flutter project.
+This directory contains the cross-platform Flutter application for **PostureSense (AI Text Neck & Posture Analyzer)**.
 
-## Getting Started
+For complete project documentation, architecture diagrams, biomechanical formulas, and getting started instructions, please see the root [README.md](../README.md).
 
-This project is a starting point for a Flutter application.
+### Quick Start
+```bash
+# Install dependencies
+flutter pub get
 
-A few resources to get you started if this is your first Flutter project:
+# Run on Chrome Web
+flutter run -d chrome --web-port 8080
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+# Run on Android
+flutter run -d android
+```
