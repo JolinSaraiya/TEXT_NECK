@@ -46,4 +46,13 @@ class WebPoseLandmarks {
 class WebPoseBridge {
   /// Fetches the latest real-time MediaPipe pose data from the browser window.
   static WebPoseLandmarks? getLatestPose() => bridge.getLatestPose();
+
+  /// Triggers MediaPipe Pose detection on a static photo (data URL).
+  static Future<void> analyzeStaticImage(String dataUrl) => bridge.analyzeStaticImage(dataUrl);
+
+  /// Reads the result of the last static image analysis.
+  static WebPoseLandmarks? getStaticPoseResult() => bridge.getStaticPoseResult();
+
+  /// Activates or pauses background video processing loop for zero CPU lag.
+  static void setPoseStreamActive(bool active) => bridge.setPoseStreamActive(active);
 }

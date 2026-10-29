@@ -5,7 +5,7 @@ import '../theme/app_colors.dart';
 import 'dashboard_view.dart';
 import 'analysis_results_screen.dart';
 import 'exercise_screen.dart';
-import 'profile_screen.dart'; // From team member's code
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,35 +15,48 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0; // Default to Home Dashboard
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  int _selectedIndex = 0;
+  late final List<Widget> _screens;
 
   @override
-  Widget build(BuildContext context) {
-    final List<Widget> screens = [
-      DashboardView(onProfileTap: () => _onItemTapped(3)),
+  void initState() {
+    super.initState();
+    _screens = [
+      DashboardView(
+        onProfileTap: () => _onItemTapped(3),
+        onExercisesTap: () => _onItemTapped(2),
+      ),
       const AnalysisResultsScreen(),
       const ExerciseScreen(),
       const ProfileScreen(),
     ];
+  }
 
+  void _onItemTapped(int index) {
+    if (_selectedIndex != index) {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: AppColors.bg(context),
       body: Stack(
         children: [
-          // The current screen
-          screens[_selectedIndex],
-          
-          // Floating Pill Navigation Bar
+          // Preserve tab states with IndexedStack for instant zero-lag switching
+          IndexedStack(
+            index: _selectedIndex,
+            children: _screens,
+          ),
+
+          // Floating Pill Navigation Bar (Full Desktop Width)
           Positioned(
-            bottom: 30,
+            bottom: 24,
             left: 20,
             right: 20,
             child: _buildFloatingNavBar(context, isDark),
@@ -55,18 +68,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildFloatingNavBar(BuildContext context, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surf(context),
-        borderRadius: BorderRadius.circular(40),
+        color: isDark ? const Color(0xFF161F2E) : Colors.white,
+        borderRadius: BorderRadius.circular(36),
         border: Border.all(
-          color: AppColors.border(context),
-          width: 1.5,
+          color: isDark ? const Color(0xFF263246) : const Color(0xFFE2E8F0),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withValues(alpha: 0.45)
+                ? Colors.black.withValues(alpha: 0.5)
                 : Colors.black.withValues(alpha: 0.08),
             blurRadius: 24,
             offset: const Offset(0, 8),
@@ -76,57 +89,53 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavItem(0, Icons.grid_view_rounded, 'Home', context),
-          _buildNavItem(1, Icons.analytics_rounded, 'Results', context),
-          _buildNavItem(2, Icons.fitness_center_rounded, 'Exercise', context),
-          _buildNavItem(3, Icons.person_rounded, 'Profile', context),
+          _buildNavItem(0, Icons.home_rounded, 'Home', isDark),
+          _buildNavItem(1, Icons.bar_chart_rounded, 'Stats', isDark),
+          _buildNavItem(2, Icons.directions_run_rounded, 'Exercises', isDark),
+          _buildNavItem(3, Icons.person_rounded, 'Profile', isDark),
         ],
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label, BuildContext context) {
+  Widget _buildNavItem(int index, IconData icon, String label, bool isDark) {
     final isSelected = _selectedIndex == index;
+
+    final activeBg = isDark ? const Color(0xFF143026) : const Color(0xFFE6F4EA);
+    final activeFg = isDark ? const Color(0xFF10B981) : const Color(0xFF059669);
+    final inactiveFg = isDark ? const Color(0xFF9CA3AF) : const Color(0xFF64748B);
 
     return GestureDetector(
       onTap: () => _onItemTapped(index),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutQuint,
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 16.0 : 12.0,
-          vertical: 10.0,
-        ),
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryAccent : Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
+          color: isSelected ? activeBg : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
         ),
-        child: Row(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 20,
-              color: isSelected
-                  ? Colors.black
-                  : AppColors.subtext(context),
+              size: 22,
+              color: isSelected ? activeFg : inactiveFg,
             ),
-            if (isSelected) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black,
-                ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                color: isSelected ? activeFg : inactiveFg,
               ),
-            ],
+            ),
           ],
         ),
       ),
     );
   }
 }
-

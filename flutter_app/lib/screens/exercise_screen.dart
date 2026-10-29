@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import '../theme/theme_controller.dart';
 import '../widgets/exercise_detail_sheet.dart';
 
 class Exercise {
@@ -87,47 +88,130 @@ class ExerciseScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       color: AppColors.bg(context),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24.0, 24.0, 24.0, 0),
+          padding: const EdgeInsets.fromLTRB(24.0, 20.0, 24.0, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Exercise Library',
-                style: GoogleFonts.inter(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.text(context),
-                ),
+                  // ── Header (Harmonized with Home & Stats) ──────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.asset(
+                              'assets/images/app_icon.png',
+                              width: 44,
+                              height: 44,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              RichText(
+                                text: TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Posture',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.text(context),
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: 'Sense',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.brandGreen,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: ' Routines',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.subtext(context),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                'Daily clinical exercises for spinal relief',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11.5,
+                                  color: AppColors.subtext(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      // Light / Dark Mode Toggle
+                      GestureDetector(
+                        onTap: () => ThemeController.instance.toggleTheme(),
+                        child: Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: AppColors.surf(context),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border(context)),
+                          ),
+                          child: Icon(
+                            isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                            color: isDark ? const Color(0xFFFBBF24) : const Color(0xFF64748B),
+                            size: 19,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  Text(
+                    'Exercise Library',
+                    style: GoogleFonts.inter(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.text(context),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Follow guided micro-routines to relieve neck tension and reset cervical curvature.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: AppColors.subtext(context),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 140), // Fully clear the floating nav pill
+                      itemCount: _exercises.length,
+                      itemBuilder: (context, index) {
+                        final exercise = _exercises[index];
+                        return _buildExerciseListItem(context, exercise);
+                      },
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Daily routines to fix your text neck.',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: AppColors.subtext(context),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 110), // Padding to clear the bottom nav pill
-                  itemCount: _exercises.length,
-                  itemBuilder: (context, index) {
-                    final exercise = _exercises[index];
-                    return _buildExerciseListItem(context, exercise);
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
+        );
+      }
 
   Widget _buildExerciseListItem(BuildContext context, Exercise exercise) {
     return Container(

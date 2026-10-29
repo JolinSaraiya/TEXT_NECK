@@ -1,13 +1,5 @@
+.DS_Store
+backend/
+web/
 node_modules/
 .env
-.DS_Store
-dist/
-build/
-.expo/
-
-# Python AI Server
-__pycache__/
-*.pyc
-venv/
-.venv/
-

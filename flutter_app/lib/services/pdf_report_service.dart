@@ -74,7 +74,7 @@ class PdfReportService {
     );
 
     await Printing.layoutPdf(
-      name: "TextNeck_Clinical_Report_${now.millisecondsSinceEpoch}.pdf",
+      name: "PostureSense_Clinical_Report_${now.millisecondsSinceEpoch}.pdf",
       onLayout: (PdfPageFormat format) async => pdf.save(),
     );
   }
@@ -92,7 +92,7 @@ class PdfReportService {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
-                "TEXT NECK AI CLINICAL ASSESSMENT",
+                "POSTURESENSE CLINICAL ASSESSMENT",
                 style: const pw.TextStyle(
                   fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
