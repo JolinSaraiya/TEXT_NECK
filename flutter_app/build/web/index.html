@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="PostureSense">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>PostureSense - AI Posture Scanner</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- MediaPipe Pose for Web Real-Time Computer Vision -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <script>
+    window._poseTracker = null;
+    window._latestPoseData = null;
+    window._isPoseDetecting = false;
+    window._poseStreamActive = false;
+
+    // ── Global Video Interception ──
+    // Flutter hides the camera <video> inside isolated Shadow DOMs (flt-glass-pane).
+    // The most bulletproof way to find it is to intercept its creation.
+    window._activeVideos = [];
+    const originalCreateElement = document.createElement.bind(document);
+    document.createElement = function(tagName, options) {
+      const el = originalCreateElement(tagName, options);
+      if (typeof tagName === 'string' && tagName.toLowerCase() === 'video') {
+        window._activeVideos.push(el);
+      }
+      return el;
+    };
+
+    function initMediaPipePose() {
+      if (window._poseTracker || typeof Pose === 'undefined') return;
+      try {
+        const pose = new Pose({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+
+        pose.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          enableSegmentation: false,
+          minDetectionConfidence: 0.45,
+          minTrackingConfidence: 0.45
+        });
+
+        pose.onResults((results) => {
+          if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+            window._latestPoseData = { hasPose: false, timestamp: Date.now() };
+            return;
+          }
+
+          const lms = results.poseLandmarks;
+          // Landmark indices:
+          // 0: Nose, 7: Left Ear, 8: Right Ear, 11: Left Shoulder, 12: Right Shoulder, 23: Left Hip, 24: Right Hip
+          const nose = lms[0];
+          const leftEar = lms[7];
+          const rightEar = lms[8];
+          const leftShoulder = lms[11];
+          const rightShoulder = lms[12];
+          const leftHip = lms[23];
+          const rightHip = lms[24];
+
+          // 1. Precise Side-Profile Validation (Sagittal Plane Detection):
+          // In frontal view, shoulders have wide horizontal separation (> 0.16) and
+          // the nose is positioned directly between the left and right shoulders.
+          // In 90° lateral profile, shoulders overlap horizontally (< 0.13) or one ear is hidden.
+          const shoulderDistance = Math.abs(leftShoulder.x - rightShoulder.x);
+          const bothEarsVisible = (leftEar && (leftEar.visibility || 0) > 0.4) && (rightEar && (rightEar.visibility || 0) > 0.4);
+          
+          let noseBetweenShoulders = false;
+          if (nose) {
+            const minSx = Math.min(leftShoulder.x, rightShoulder.x);
+            const maxSx = Math.max(leftShoulder.x, rightShoulder.x);
+            if (nose.x >= minSx - 0.02 && nose.x <= maxSx + 0.02) {
+              noseBetweenShoulders = true;
+            }
+          }
+
+          // True side profile condition:
+          // If shoulders are apart (> 0.14) and nose is between them or both ears visible -> FRONT VIEW!
+          const isSide = (shoulderDistance < 0.13) || (!bothEarsVisible && !noseBetweenShoulders && shoulderDistance < 0.18);
+
+          // 2. Select more visible side
+          const leftVis = (leftEar?.visibility || 0) + (leftShoulder?.visibility || 0);
+          const rightVis = (rightEar?.visibility || 0) + (rightShoulder?.visibility || 0);
+          const useLeft = leftVis >= rightVis;
+
+          const ear = useLeft ? leftEar : rightEar;
+          const shoulder = useLeft ? leftShoulder : rightShoulder;
+          const hip = useLeft ? leftHip : rightHip;
+          const sideName = useLeft ? 'left' : 'right';
+
+          // 3. Aspect-Ratio Scaled Euclidean Coordinate Math:
+          // Normalized coordinates must be scaled by actual video pixel dimensions
+          // to prevent aspect ratio distortion (e.g. 16:9 or 4:3 cameras).
+          const video = findActiveVideo();
+          const vWidth = (video && video.videoWidth) ? video.videoWidth : 640;
+          const vHeight = (video && video.videoHeight) ? video.videoHeight : 480;
+
+          const dxPx = Math.abs(ear.x - shoulder.x) * vWidth;
+          const dyPx = Math.abs(shoulder.y - ear.y) * vHeight;
+
+          // Forward Tilt from Vertical Plumb Line (0° = perfectly upright ear over shoulder)
+          // Range: 0° (optimal) to 45°+ (severe text neck)
+          const forwardTilt = dyPx === 0 ? 90.0 : Math.round((Math.atan(dxPx / dyPx) * (180.0 / Math.PI)) * 10) / 10;
+          // Clinical CVA from Horizontal Baseline (90° = upright, < 48° = forward posture)
+          const cvaAngle = Math.round((90.0 - forwardTilt) * 10) / 10;
+
+          // 4. Hip / Standing Sideways Plumb Line (Full Body Posture):
+          const hasHip = hip && (hip.visibility || 0) > 0.3 && hip.y > shoulder.y;
+          let torsoAngle = null;
+          let spinePlumbAngle = null;
+
+          if (hasHip) {
+            const torsoDx = Math.abs(shoulder.x - hip.x) * vWidth;
+            const torsoDy = Math.abs(hip.y - shoulder.y) * vHeight;
+            torsoAngle = torsoDy === 0 ? 0.0 : Math.round((Math.atan(torsoDx / torsoDy) * (180.0 / Math.PI)) * 10) / 10;
+
+            // Ear-Shoulder-Hip alignment (Spine Plumb Angle)
+            const v1x = (ear.x - shoulder.x) * vWidth;
+            const v1y = (ear.y - shoulder.y) * vHeight;
+            const v2x = (hip.x - shoulder.x) * vWidth;
+            const v2y = (hip.y - shoulder.y) * vHeight;
+            const dot = v1x * v2x + v1y * v2y;
+            const mag1 = Math.hypot(v1x, v1y);
+            const mag2 = Math.hypot(v2x, v2y);
+            if (mag1 > 0 && mag2 > 0) {
+              const cosVal = Math.max(-1.0, Math.min(1.0, dot / (mag1 * mag2)));
+              spinePlumbAngle = Math.round((Math.acos(cosVal) * (180.0 / Math.PI)) * 10) / 10;
+            }
+          }
+
+          // Store for Flutter bridge consumption
+          window._latestPoseData = {
+            hasPose: true,
+            isSideProfile: isSide,
+            shoulderDistance: shoulderDistance,
+            side: sideName,
+            earX: ear.x,
+            earY: ear.y,
+            earVis: ear.visibility || 0.9,
+            shoulderX: shoulder.x,
+            shoulderY: shoulder.y,
+            shoulderVis: shoulder.visibility || 0.9,
+            hasHip: hasHip,
+            hipX: hasHip ? hip.x : null,
+            hipY: hasHip ? hip.y : null,
+            hipVis: hasHip ? (hip.visibility || 0.8) : 0,
+            neckAngle: forwardTilt,
+            cvaAngle: cvaAngle,
+            torsoAngle: torsoAngle,
+            spinePlumbAngle: spinePlumbAngle,
+            dx: dxPx,
+            dy: dyPx,
+            timestamp: Date.now()
+          };
+        });
+
+        window._poseTracker = pose;
+        console.log("[MediaPipe] Pose Tracker successfully ready");
+
+        // Continuously capture video frames from the webcam only when active
+        function findActiveVideo() {
+          for (let i = window._activeVideos.length - 1; i >= 0; i--) {
+            const v = window._activeVideos[i];
+            if (v && v.isConnected && !v.paused && v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0) {
+              if (v.srcObject && v.srcObject.active === false) continue;
+              return v;
+            }
+          }
+          return null;
+        }
+
+        let lastProcessTime = 0;
+        let isProcessingFrame = false;
+        async function runDetectionLoop() {
+          // Zero lag optimization: Only run when scan screen is actively scanning
+          if (!window._poseStreamActive) {
+            requestAnimationFrame(runDetectionLoop);
+            return;
+          }
+
+          const now = Date.now();
+          if (!isProcessingFrame && (now - lastProcessTime > 80)) { // ~12 FPS: smooth, zero CPU freeze
+            const video = findActiveVideo();
+            if (video && window._poseTracker && !video.paused) {
+              isProcessingFrame = true;
+              try {
+                lastProcessTime = now;
+                await window._poseTracker.send({ image: video });
+              } catch (e) {
+                // Ignore transient frame skips
+              } finally {
+                isProcessingFrame = false;
+              }
+            }
+          }
+          requestAnimationFrame(runDetectionLoop);
+        }
+        requestAnimationFrame(runDetectionLoop);
+
+      } catch (err) {
+        console.error("[MediaPipe] Init error:", err);
+      }
+    }
+
+    // ── Static Image Pose Analysis ──
+    // Runs MediaPipe Pose detection on a single uploaded photo.
+    // Called from Dart via js interop: window.analyzeStaticImage(dataUrl)
+    window._staticPoseResult = null;
+    window._staticPoseReady = false;
+
+    window.analyzeStaticImage = async function(dataUrl) {
+      window._staticPoseResult = null;
+      window._staticPoseReady = false;
+
+      // Ensure pose tracker is initialized
+      if (!window._poseTracker) {
+        initMediaPipePose();
+        await new Promise(resolve => setTimeout(resolve, 2500));
+      }
+
+      try {
+        // Load the data URL into an Image element
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = dataUrl;
+        });
+
+        // Draw into an offscreen canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        // Create a one-shot pose detector for the static image
+        const staticPose = new Pose({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+        staticPose.setOptions({
+          modelComplexity: 2,
+          smoothLandmarks: false,
+          enableSegmentation: false,
+          minDetectionConfidence: 0.3,
+          minTrackingConfidence: 0.3
+        });
+
+        staticPose.onResults((results) => {
+          if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+            window._staticPoseResult = { hasPose: false };
+            window._staticPoseReady = true;
+            return;
+          }
+
+          const lms = results.poseLandmarks;
+          const nose = lms[0];
+          const leftEar = lms[7];
+          const rightEar = lms[8];
+          const leftShoulder = lms[11];
+          const rightShoulder = lms[12];
+          const leftHip = lms[23];
+          const rightHip = lms[24];
+
+          const shoulderDistance = Math.abs(leftShoulder.x - rightShoulder.x);
+          const bothEarsVisible = (leftEar && (leftEar.visibility || 0) > 0.4) && (rightEar && (rightEar.visibility || 0) > 0.4);
+          let noseBetweenShoulders = false;
+          if (nose) {
+            const minSx = Math.min(leftShoulder.x, rightShoulder.x);
+            const maxSx = Math.max(leftShoulder.x, rightShoulder.x);
+            if (nose.x >= minSx - 0.02 && nose.x <= maxSx + 0.02) noseBetweenShoulders = true;
+          }
+          const isSide = (shoulderDistance < 0.13) || (!bothEarsVisible && !noseBetweenShoulders && shoulderDistance < 0.18);
+
+          const leftVis = (leftEar?.visibility || 0) + (leftShoulder?.visibility || 0);
+          const rightVis = (rightEar?.visibility || 0) + (rightShoulder?.visibility || 0);
+          const useLeft = leftVis >= rightVis;
+          const ear = useLeft ? leftEar : rightEar;
+          const shoulder = useLeft ? leftShoulder : rightShoulder;
+          const hip = useLeft ? leftHip : rightHip;
+          const sideName = useLeft ? 'left' : 'right';
+
+          const vWidth = canvas.width;
+          const vHeight = canvas.height;
+          const dxPx = Math.abs(ear.x - shoulder.x) * vWidth;
+          const dyPx = Math.abs(shoulder.y - ear.y) * vHeight;
+          const forwardTilt = dyPx === 0 ? 90.0 : Math.round((Math.atan(dxPx / dyPx) * (180.0 / Math.PI)) * 10) / 10;
+          const cvaAngle = Math.round((90.0 - forwardTilt) * 10) / 10;
+
+          const hasHip = hip && (hip.visibility || 0) > 0.3 && hip.y > shoulder.y;
+          let torsoAngle = null;
+          let spinePlumbAngle = null;
+          if (hasHip) {
+            const torsoDx = Math.abs(shoulder.x - hip.x) * vWidth;
+            const torsoDy = Math.abs(hip.y - shoulder.y) * vHeight;
+            torsoAngle = torsoDy === 0 ? 0.0 : Math.round((Math.atan(torsoDx / torsoDy) * (180.0 / Math.PI)) * 10) / 10;
+            const v1x = (ear.x - shoulder.x) * vWidth;
+            const v1y = (ear.y - shoulder.y) * vHeight;
+            const v2x = (hip.x - shoulder.x) * vWidth;
+            const v2y = (hip.y - shoulder.y) * vHeight;
+            const dot = v1x * v2x + v1y * v2y;
+            const mag1 = Math.hypot(v1x, v1y);
+            const mag2 = Math.hypot(v2x, v2y);
+            if (mag1 > 0 && mag2 > 0) {
+              const cosVal = Math.max(-1.0, Math.min(1.0, dot / (mag1 * mag2)));
+              spinePlumbAngle = Math.round((Math.acos(cosVal) * (180.0 / Math.PI)) * 10) / 10;
+            }
+          }
+
+          window._staticPoseResult = {
+            hasPose: true,
+            isSideProfile: isSide,
+            shoulderDistance: shoulderDistance,
+            side: sideName,
+            earX: ear.x,
+            earY: ear.y,
+            earVis: ear.visibility || 0.9,
+            shoulderX: shoulder.x,
+            shoulderY: shoulder.y,
+            shoulderVis: shoulder.visibility || 0.9,
+            hasHip: !!hasHip,
+            hipX: hasHip ? hip.x : null,
+            hipY: hasHip ? hip.y : null,
+            hipVis: hasHip ? (hip.visibility || 0.8) : 0,
+            neckAngle: forwardTilt,
+            cvaAngle: cvaAngle,
+            torsoAngle: torsoAngle,
+            spinePlumbAngle: spinePlumbAngle,
+            dx: dxPx,
+            dy: dyPx,
+            imgWidth: vWidth,
+            imgHeight: vHeight
+          };
+          window._staticPoseReady = true;
+          console.log('[MediaPipe] Static image analysis complete:', window._staticPoseResult);
+        });
+
+        await staticPose.send({ image: canvas });
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        if (!window._staticPoseReady) {
+          await staticPose.send({ image: canvas });
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        staticPose.close();
+      } catch (err) {
+        console.error('[MediaPipe] Static image analysis error:', err);
+        window._staticPoseResult = { hasPose: false, error: err.toString() };
+        window._staticPoseReady = true;
+      }
+    };
+
+    // Initialize when page loads
+    window.addEventListener('load', () => {
+      setTimeout(initMediaPipePose, 1200);
+    });
+    // Fallback init on DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(initMediaPipePose, 1200);
+    });
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
